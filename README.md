@@ -1,4 +1,4 @@
-# WhatsAgent: Enterprise Multi-Tenant AI WhatsApp Orchestrator 🤖
+# WhatsAgent: Enterprise Multi-Tenant AI WhatsApp Orchestrator
 
 > [!IMPORTANT]
 > **Live Demo Access & Credentials**
