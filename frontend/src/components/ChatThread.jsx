@@ -235,7 +235,7 @@ export default function ChatThread({ session, messages, onChanged }) {
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
             rows={1}
             placeholder="Type a reply…"
-            className="flex-1 resize-none text-[13.5px] border border-hair rounded-xl px-3.5 py-2.5 max-h-32 focus:outline-none focus:border-brand"
+            className="flex-1 bg-canvas text-ink resize-none text-[13.5px] border border-hair rounded-xl px-3.5 py-2.5 max-h-32 focus:outline-none focus:border-brand"
           />
           <button
             onClick={sendReply}
