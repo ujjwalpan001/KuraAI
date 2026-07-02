@@ -49,10 +49,14 @@ function Media({ msg }) {
 }
 
 export default function ChatThread({ session, messages, onChanged }) {
-  const endRef = useRef(null);
+  const scrollRef = useRef(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, session]);
+  useEffect(() => { 
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, session]);
   useEffect(() => { setDraft(""); }, [session?.session_id]);
 
   const changeStatus = async (status) => {
@@ -175,7 +179,7 @@ export default function ChatThread({ session, messages, onChanged }) {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto chat-canvas px-5 py-4 space-y-1.5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-canvas px-5 py-4 space-y-1.5">
         {messages.map((m, i) => {
           const out = m.direction === "OUTBOUND";
           const prev = messages[i - 1];
@@ -218,7 +222,6 @@ export default function ChatThread({ session, messages, onChanged }) {
             </div>
           </div>
         )}
-        <div ref={endRef} />
       </div>
 
       {/* Composer — human agent can reply to the customer (essential when escalated) */}
