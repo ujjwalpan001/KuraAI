@@ -12,7 +12,8 @@ import {
   Search,
   Menu,
   UserX,
-  Smartphone
+  Smartphone,
+  Bot
 } from "lucide-react";
 import { getUser, logout, api } from "../api/client";
 
@@ -60,63 +61,89 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
   }, [activeTenant]);
 
   return (
-    <div className="h-screen w-full flex bg-canvas text-ink overflow-hidden font-sans">
+    <div className="h-screen w-full flex bg-[#030305] text-ink overflow-hidden font-sans relative">
+      {/* Background Orbs */}
+      <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] rounded-full bg-brand/10 blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none"></div>
+
       {/* Sidebar Navigation */}
       <aside
-        className={`shrink-0 border-r border-hair bg-surface flex flex-col transition-all duration-300 ${
+        className={`shrink-0 border-r border-white/5 bg-white/[0.02] backdrop-blur-2xl flex flex-col transition-all duration-300 relative z-20 ${
           sidebarOpen ? "w-[260px]" : "w-[72px]"
         }`}
       >
-        <div className="h-16 flex items-center px-4 border-b border-hair">
-          <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shrink-0">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M21 11.5a8.4 8.4 0 01-12 7.6L3 21l1.9-5.8A8.5 8.5 0 1121 11.5z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+        <div className="h-24 flex items-center px-6 mb-2">
+          <div className="flex items-center gap-3 text-white font-bold text-xl tracking-wide">
+            <Bot size={28} className="text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]" />
+            {sidebarOpen && (
+              <div className="flex flex-col">
+                <span className="font-display font-bold text-[18px] tracking-tight text-white">WhatsAgent</span>
+                <span className="text-[10px] text-indigo-400 font-semibold tracking-widest uppercase mt-0.5">Enterprise</span>
+              </div>
+            )}
           </div>
-          {sidebarOpen && <span className="ml-3 font-display font-bold text-[16px] tracking-tight truncate">WhatsAgent</span>}
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-2 px-4 space-y-2 overflow-y-auto custom-scrollbar">
           {NAVIGATION.map((nav) => {
             const active = view === nav.id;
             return (
               <button
                 key={nav.id}
                 onClick={() => onViewChange(nav.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                  active ? "bg-brand/10 text-brand" : "text-faint hover:bg-canvas hover:text-ink"
+                className={`group relative w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-500 overflow-hidden ${
+                  active ? "bg-white/[0.06] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] text-white" : "text-white/40 hover:bg-white/[0.02] hover:text-white/80"
                 }`}
                 title={sidebarOpen ? undefined : nav.label}
               >
-                <nav.icon size={18} className={active ? "text-brand" : "text-muted"} />
-                {sidebarOpen && <span className="text-[13.5px] font-medium">{nav.label}</span>}
+                {active && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-transparent opacity-50"></div>
+                )}
+                {active && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-indigo-400 to-purple-500 rounded-r-md shadow-[0_0_12px_rgba(129,140,248,0.8)]"></div>
+                )}
+                
+                <div className={`relative z-10 flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-500 ${
+                  active ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20" : "bg-white/[0.03] text-white/40 group-hover:bg-white/[0.08] group-hover:text-white/80 group-hover:scale-110"
+                }`}>
+                  <nav.icon size={16} strokeWidth={active ? 2.5 : 2} />
+                </div>
+                
+                {sidebarOpen && <span className={`relative z-10 text-[13.5px] tracking-wide transition-all duration-300 ${
+                  active ? "font-semibold" : "font-medium"
+                }`}>{nav.label}</span>}
               </button>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-hair">
+        <div className="p-3 mt-auto mb-4 mx-3 bg-white/[0.02] border border-white/5 rounded-2xl backdrop-blur-xl">
           <button
             onClick={() => {
               logout();
               window.location.reload();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-faint hover:bg-alert/10 hover:text-alert transition-colors"
+            className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-white/50 hover:bg-rose-500/10 hover:text-rose-400 transition-all duration-300 group"
           >
-            <div className="w-6 h-6 rounded-md bg-canvas border border-hair flex items-center justify-center shrink-0 text-[10px] font-bold text-muted">
+            <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/5 flex items-center justify-center shrink-0 text-[11px] font-bold text-white/70 group-hover:bg-rose-500/20 group-hover:border-rose-500/30 group-hover:text-rose-400 transition-all">
               {initials}
             </div>
-            {sidebarOpen && <span className="text-[13px] font-medium">Log out</span>}
+            {sidebarOpen && (
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-[13px] font-semibold text-white/80 group-hover:text-rose-400 transition-colors truncate">Admin User</span>
+                <span className="text-[10px] font-medium text-white/40 tracking-wide uppercase">Log out</span>
+              </div>
+            )}
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-canvas">
+      <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10">
         {/* Global Header */}
-        <header className="h-16 shrink-0 bg-surface border-b border-hair flex items-center justify-between px-6 z-20 relative">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen((v) => !v)} className="text-muted hover:text-ink transition-colors">
+        <header className="h-20 shrink-0 bg-white/[0.02] backdrop-blur-2xl border-b border-white/5 flex items-center justify-between px-8 z-30 relative">
+          <div className="flex items-center gap-6">
+            <button onClick={() => setSidebarOpen((v) => !v)} className="text-white/50 hover:text-white transition-colors">
               <Menu size={20} />
             </button>
 
@@ -124,15 +151,15 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
             <div className="relative">
               <button 
                 onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
-                className="h-9 flex items-center gap-2 px-3 border border-hair rounded-lg bg-canvas hover:border-brand/50 transition-colors focus:outline-none focus:ring-2 focus:ring-brand/20"
+                className="h-10 flex items-center gap-3 px-4 border border-white/10 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] transition-all focus:outline-none focus:border-indigo-500/50 backdrop-blur-md shadow-lg"
               >
-                <div className="w-5 h-5 rounded bg-brand/10 text-brand flex items-center justify-center text-[10px] font-bold">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[11px] font-bold shadow-inner">
                   {activeTenantName ? activeTenantName.charAt(0).toUpperCase() : "T"}
                 </div>
-                <span className="text-[13px] font-medium text-ink max-w-[120px] truncate">
+                <span className="text-[14px] font-medium text-white max-w-[140px] truncate tracking-wide">
                   {activeTenantName || "Select Tenant"}
                 </span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-muted transition-transform ${tenantDropdownOpen ? 'rotate-180' : ''}`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-white/50 transition-transform duration-300 ${tenantDropdownOpen ? 'rotate-180' : ''}`}>
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
@@ -179,9 +206,9 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-6">
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
               <input
                 type="text"
                 value={searchQuery}
@@ -193,7 +220,7 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
                   if (searchQuery.length > 0) setSearchOpen(true);
                 }}
                 placeholder="Search phone number..."
-                className="w-64 h-9 pl-9 pr-4 rounded-full bg-canvas border border-hair text-[13px] focus:outline-none focus:border-brand transition-colors"
+                className="w-72 h-10 pl-11 pr-4 rounded-xl bg-white/[0.03] border border-white/10 text-[13px] text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all backdrop-blur-md shadow-inner"
               />
               
               {searchOpen && (
@@ -224,11 +251,11 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
             <div className="relative">
               <button 
                 onClick={() => setBellOpen(!bellOpen)}
-                className="relative text-muted hover:text-ink transition-colors flex items-center justify-center"
+                className="relative w-10 h-10 rounded-xl flex items-center justify-center bg-white/[0.03] border border-white/10 text-white/60 hover:bg-white/[0.08] hover:text-white transition-all backdrop-blur-md"
               >
-                <Bell size={20} />
+                <Bell size={18} />
                 {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-surface animate-pulse"></span>
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.8)] animate-pulse"></span>
                 )}
               </button>
               
@@ -284,15 +311,15 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-              <span className="text-[12px] font-medium text-muted">All Systems Operational</span>
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-sm">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></div>
+              <span className="text-[11px] font-semibold text-emerald-400 tracking-wide uppercase">Operational</span>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto relative z-10 custom-scrollbar">
           {children}
         </div>
       </main>
