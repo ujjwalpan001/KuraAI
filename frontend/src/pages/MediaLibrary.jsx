@@ -41,6 +41,7 @@ export default function MediaLibrary({ tenantId }) {
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+
     
     // Clear the input so the same file can be selected again if needed
     e.target.value = "";
@@ -50,6 +51,13 @@ export default function MediaLibrary({ tenantId }) {
     let anyIndexed = false;
 
     for (const file of files) {
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      if (!allowedExtensions.includes(fileExt)) {
+        alert(`Unsupported format: ${file.name}. Only .jpg, .png, and .pdf are supported by Meta WhatsApp API.`);
+        continue;
+      }
+
       const keyword = window.prompt(`Enter a keyword trigger for '${file.name}':\n(e.g. 'sofa', 'catalog')`);
       if (!keyword) continue; // Skip if cancelled
       if (!keyword.trim().match(/^[a-zA-Z0-9_-]+$/)) {
@@ -113,7 +121,7 @@ export default function MediaLibrary({ tenantId }) {
             ref={fileInputRef} 
             onChange={handleFileChange} 
             className="hidden" 
-            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            accept=".pdf,.jpg,.jpeg,.png"
             multiple
           />
           <button 
