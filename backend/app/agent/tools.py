@@ -29,9 +29,9 @@ TOOLS = [
         "description": (
             "Search the visual product/service catalog and show the customer the single best-matching "
             "item — its photo AND its details (price, colors, material, delivery time) together. "
-            "Use this when the customer wants to SEE or find a product by description rather than by exact name, "
+            "Use this when the customer wants to find a product by description rather than by exact name, "
             "e.g. 'show me a green leather sofa', 'do you have a marble dining table', "
-            "'what beds do you have', 'I need an AC service'. The item's image is sent automatically."
+            "'what beds do you have', 'I need an AC service'. To send an image, use get_media."
         ),
         "parameters": {
             "type": "object",
