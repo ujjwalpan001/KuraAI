@@ -147,9 +147,28 @@ function LoginForm({ onSwitch, onSuccess }) {
       <h1 className="text-[32px] font-semibold text-white mb-2 tracking-tight">
         Welcome back
       </h1>
-      <p className="text-[#8A8A9D] text-[14px] mb-8">
+      <p className="text-[#8A8A9D] text-[14px] mb-6">
         Sign in to your enterprise dashboard
       </p>
+
+      <div className="mb-6 p-4 rounded-xl bg-[#8468F5]/10 border border-[#8468F5]/20 text-[13px] text-[#D7D9E6] leading-relaxed flex items-start gap-3">
+        <div className="mt-0.5 text-[#8468F5]">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </div>
+        <div>
+          <p className="mb-2 text-[#A0A0B0]">
+            The backend is deployed on a free cloud tier. It may take 15-30 seconds to wake up on the first request.
+          </p>
+          <div className="flex flex-col gap-1 font-mono text-[12px] bg-black/20 p-2.5 rounded-lg border border-white/5">
+            <div><span className="text-[#8A8A9D]">Email:</span> admin@gmail.com</div>
+            <div><span className="text-[#8A8A9D]">Pass:</span> Gmail@9804</div>
+          </div>
+        </div>
+      </div>
 
       <form onSubmit={submit} className="space-y-4">
         <AuthField 
