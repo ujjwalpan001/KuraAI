@@ -34,6 +34,44 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
     }
   };
 
+  const handleNewTenant = async () => {
+    const name = prompt("Enter new workspace name (e.g. 'Luxury Furniture'):");
+    if (!name) return;
+    const id = prompt("Enter unique workspace ID (e.g. 'luxury_corp'):");
+    if (!id) return;
+    
+    try {
+      await api.createTenant({
+        tenant_id: id,
+        name: name,
+        system_prompt: `You are an AI assistant for ${name}.`
+      });
+      if (onTenantsChanged) await onTenantsChanged();
+      onSelectTenant(id);
+      alert("Workspace created successfully!");
+    } catch (e) {
+      alert("Failed to create workspace: " + e.message);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!activeTenant) return;
+    if (!confirm(`Are you absolutely sure you want to delete ${activeObj.name}? This will delete all catalog items, media, and knowledge associated with this workspace. This action cannot be undone.`)) return;
+    
+    setSaving(true);
+    try {
+      await api.deleteTenant(activeTenant);
+      if (onTenantsChanged) await onTenantsChanged();
+      const remaining = tenants.filter(t => t.tenant_id !== activeTenant);
+      onSelectTenant(remaining.length > 0 ? remaining[0].tenant_id : null);
+      alert("Workspace deleted successfully.");
+    } catch (e) {
+      alert("Failed to delete workspace: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex h-full w-full bg-canvas">
       {/* Left: Tenant List */}
@@ -41,7 +79,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
         <div className="p-4 border-b border-hair">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[16px] font-display font-semibold">Tenants</h2>
-            <button className="text-[12px] font-medium text-brand flex items-center gap-1 hover:text-brand-deep transition-colors">
+            <button onClick={handleNewTenant} className="text-[12px] font-medium text-brand flex items-center gap-1 hover:text-brand-deep transition-colors">
               <Plus size={14} /> New
             </button>
           </div>
@@ -167,6 +205,19 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                     <input placeholder="e.g. luxury, furniture" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
                   </div>
                 </div>
+              </div>
+              
+              {/* Danger Zone */}
+              <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-6">
+                <h3 className="text-[15px] font-display font-semibold text-rose-500 mb-2">Danger Zone</h3>
+                <p className="text-[13px] text-muted mb-4">Permanently delete this workspace and all its data (catalog, media, knowledge base). This action cannot be undone.</p>
+                <button 
+                  onClick={handleDelete}
+                  disabled={saving}
+                  className="px-4 py-2 bg-rose-500 text-white rounded-lg text-[13px] font-medium hover:bg-rose-600 transition-colors disabled:opacity-50"
+                >
+                  Delete Workspace
+                </button>
               </div>
             </div>
           </div>
