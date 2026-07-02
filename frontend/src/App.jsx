@@ -10,8 +10,6 @@ import Analytics from "./pages/Analytics";
 import Broadcasts from "./pages/Broadcasts";
 import MediaLibrary from "./pages/MediaLibrary";
 import TenantManagement from "./pages/TenantManagement";
-import WhatsAppSimulator from "./pages/WhatsAppSimulator";
-
 // Force logout on initial load for demo purposes so the Login page always comes first
 if (!sessionStorage.getItem("demo_init")) {
   logout();
@@ -54,8 +52,6 @@ function Console() {
         return <TenantManagement tenants={tenants} activeTenant={activeTenant} onSelectTenant={setActiveTenant} onTenantsChanged={loadTenants} />;
       case "analytics":
         return <Analytics tenantId={activeTenant} />;
-      case "simulator":
-        return <WhatsAppSimulator tenantId={activeTenant} activeTenantName={activeTenantObj?.name} tenants={tenants} />;
       case "settings":
         return (
            <div className="p-8 max-w-4xl mx-auto">

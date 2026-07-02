@@ -23,7 +23,6 @@ const NAVIGATION = [
   { id: "media-library", label: "Media Library", icon: ImageIcon },
   { id: "tenants", label: "Tenants", icon: Users },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "simulator", label: "WA Simulator", icon: Smartphone },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
