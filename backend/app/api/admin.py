@@ -96,6 +96,7 @@ async def admin_list_tenants():
     tenants = await db.tenants.find({}, {"_id": 0}).to_list(None)
     for t in tenants:
         t.pop("whatsapp_access_token", None)
+        t["chat_count"] = await db.chat_sessions.count_documents({"tenant_id": t["tenant_id"]})
     return {"tenants": tenants}
 
 

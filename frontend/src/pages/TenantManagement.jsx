@@ -114,7 +114,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                 </div>
                 <div className="mt-3 flex items-center gap-3 text-[11px] text-muted">
                   <span className="flex items-center gap-1"><Bot size={12} /> Active</span>
-                  <span className="flex items-center gap-1"><Users size={12} /> 124 Chats</span>
+                  <span className="flex items-center gap-1"><Users size={12} /> {t.chat_count || 0} Chats</span>
                 </div>
               </button>
             )
