@@ -1,5 +1,10 @@
 # WhatsAgent: Enterprise Multi-Tenant AI WhatsApp Orchestrator 🤖
 
+> [!IMPORTANT]
+> **Live Demo Access & Credentials**
+> The backend for this project is deployed on a free cloud tier. Please allow **15-30 seconds** for the server to wake up on your first request.
+> - **Demo Email:** `admin@gmail.com`
+> - **Demo Password:** `Admin@9804`
 > **WhatsAgent** is my official submission for the AI Engineer assessment. It is a cloud-native, enterprise-grade, multi-tenant SaaS platform that empowers businesses to deploy autonomous AI support, sales, and knowledge agents directly onto WhatsApp.
 
 This platform goes far beyond a simple wrapper around OpenAI. Built upon **LangGraph**, **Groq (Llama 3.1 & 3.3 Vision)**, and the **Meta WhatsApp Cloud API**, it features a fully asynchronous architecture designed to handle concurrent webhook traffic across hundreds of businesses. It natively executes Retrieval-Augmented Generation (RAG) over business catalogs and PDF documents, and provides a stunning, real-time React dashboard for human oversight.

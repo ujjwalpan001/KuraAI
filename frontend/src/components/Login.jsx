@@ -31,7 +31,7 @@ export default function Login({ onSuccess }) {
     <div className="min-h-screen flex items-center justify-center bg-[#24242F] font-sans text-white p-4 sm:p-6 lg:p-8" style={{ fontFamily: "'Inter', sans-serif" }}>
       <style>{FONT_IMPORT}</style>
 
-      <div className="w-full max-w-[1000px] h-auto lg:h-[640px] bg-[#1E1E26] rounded-[32px] shadow-2xl flex flex-col lg:flex-row p-3 gap-3 relative overflow-hidden">
+      <div className="w-full max-w-[1000px] h-auto lg:h-[720px] bg-[#1E1E26] rounded-[32px] shadow-2xl flex flex-col lg:flex-row p-3 gap-3 relative overflow-hidden">
         
         {/* ── Left Carousel Panel ── */}
         <div className="hidden lg:flex flex-col relative w-[48%] h-full rounded-[24px] overflow-hidden group bg-black">
@@ -165,7 +165,7 @@ function LoginForm({ onSwitch, onSuccess }) {
           </p>
           <div className="flex flex-col gap-1 font-mono text-[12px] bg-black/20 p-2.5 rounded-lg border border-white/5">
             <div><span className="text-[#8A8A9D]">Email:</span> admin@gmail.com</div>
-            <div><span className="text-[#8A8A9D]">Pass:</span> Gmail@9804</div>
+            <div><span className="text-[#8A8A9D]">Pass:</span> Admin@9804</div>
           </div>
         </div>
       </div>
