@@ -227,6 +227,51 @@ async def _get_or_create_session(tenant_id: str, customer_phone: str, initial_st
         return_document=ReturnDocument.AFTER,
     )
     return session
+import base64
+from app.storage import gridfs
+from app.whatsapp import client as wa
+
+async def _fetch_and_store_media(message_data: dict, tenant_id: str, direction: str):
+    """Background task to fetch media for messages not handled by the agent (e.g. OUTBOUND or NEEDS_HUMAN)."""
+    if not message_data.get("media_id"):
+        return
+        
+    try:
+        db = get_db()
+        instance_name = message_data.get("instance_name", "default")
+        raw_msg = message_data.get("raw_message_payload") or {}
+        
+        media_resp = await wa.get_media_base64(instance_name, raw_msg)
+        b64_data = media_resp.get("base64", "")
+        if not b64_data:
+            return
+            
+        media_bytes = base64.b64decode(b64_data)
+        mime = (message_data.get("media_mime") or "").lower()
+        fname = message_data.get("media_filename") or f"{direction.lower()}_{message_data['message_id']}"
+        
+        if message_data.get("media_type") == "image":
+            content_type = "image/jpeg"
+            fname += ".jpg"
+        else:
+            content_type = mime or "application/octet-stream"
+            
+        stored_id = await gridfs.upload_bytes(
+            data=media_bytes,
+            filename=fname,
+            content_type=content_type,
+            metadata={"tenant_id": tenant_id, "direction": direction},
+        )
+        stored_url = gridfs.public_url(stored_id)
+        
+        # Update the audit log
+        await db.message_audit_log.update_one(
+            {"message_id": message_data["message_id"], "direction": direction},
+            {"$set": {"media_url": stored_url}}
+        )
+        logger.info(f"[{direction} MEDIA] Fetched and stored media -> {stored_url}")
+    except Exception as e:
+        logger.warning(f"Failed to fetch {direction} media: {e}")
 
 
 async def _run_agent(message_data: dict, tenant_id: str, session_id: str):
@@ -415,6 +460,9 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
             "is_read": True,
             "timestamp": datetime.utcnow(),
         })
+        if message_data.get("media_id"):
+            background_tasks.add_task(_fetch_and_store_media, message_data, tenant_id, "OUTBOUND")
+            
         logger.info(f"Outbound phone message logged to session {session['session_id']}")
         return Response(status_code=200)
 
@@ -435,6 +483,9 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
             "media_filename": message_data["media_filename"],
             "timestamp": datetime.utcnow(),
         })
+        if message_data.get("media_id"):
+            background_tasks.add_task(_fetch_and_store_media, message_data, tenant_id, "INBOUND")
+            
         logger.info(f"Session {session['session_id']} is NEEDS_HUMAN — logged message, skipping agent")
         return Response(status_code=200)
 
