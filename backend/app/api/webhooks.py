@@ -106,6 +106,10 @@ def _extract_message(payload: dict) -> dict | None:
         if not remote_jid or not message_id:
             return None
 
+        # Ignore all group messages
+        if "@g.us" in remote_jid:
+            return None
+
         # Skip group messages (group JIDs contain @g.us)
         if "@g.us" in remote_jid:
             return None
@@ -459,12 +463,25 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
                 {"$set": {"customer_phone": message_data["customer_phone"]}}
             )
 
+    # Check if a session already exists before getting/creating one
+    existing_session = await db.chat_sessions.find_one({"customer_phone": message_data["customer_phone"], "tenant_id": tenant_id})
+
     # Get or create session
     session = await _get_or_create_session(tenant_id, message_data["customer_phone"])
 
     # If this message was sent manually by the business from their physical phone,
     # just log it to the dashboard and DO NOT run the AI agent!
     if message_data.get("from_me"):
+        # If the business sent the VERY FIRST message to start the chat,
+        # we automatically put the chat in "Human Mode" so the AI won't reply when the friend answers!
+        if not existing_session:
+            await db.chat_sessions.update_one(
+                {"session_id": session["session_id"]},
+                {"$set": {"status": "NEEDS_HUMAN"}}
+            )
+            session["status"] = "NEEDS_HUMAN"
+            logger.info(f"Business initiated chat. Set session {session['session_id']} to NEEDS_HUMAN.")
+
         await db.message_audit_log.insert_one({
             "message_id": message_data["message_id"],
             "session_id": session["session_id"],
