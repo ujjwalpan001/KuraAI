@@ -14,7 +14,7 @@ router = APIRouter()
 async def list_tenants():
     db = get_db()
     tenants = await db.tenants.find(
-        {}, {"_id": 0, "tenant_id": 1, "name": 1, "is_active": 1}
+        {}, {"_id": 0}
     ).to_list(None)
     return {"tenants": tenants}
 
