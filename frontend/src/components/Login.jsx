@@ -151,22 +151,15 @@ function LoginForm({ onSwitch, onSuccess }) {
         Sign in to your enterprise dashboard
       </p>
 
-      <div className="mb-6 p-4 rounded-xl bg-[#8468F5]/10 border border-[#8468F5]/20 text-[13px] text-[#D7D9E6] leading-relaxed flex items-start gap-3">
-        <div className="mt-0.5 text-[#8468F5]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="16" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-          </svg>
+      <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[13px] text-emerald-400 leading-relaxed flex items-start gap-3">
+        <div className="mt-0.5 text-emerald-500">
+          <ShieldCheck size={18} />
         </div>
         <div>
-          <p className="mb-2 text-[#A0A0B0]">
-            The backend is deployed on a free cloud tier. It may take 15-30 seconds to wake up on the first request.
+          <p className="font-medium mb-1">Fresh Database</p>
+          <p className="text-emerald-500/80">
+            The database has been securely wiped. Please create a new account to get started.
           </p>
-          <div className="flex flex-col gap-1 font-mono text-[12px] bg-black/20 p-2.5 rounded-lg border border-white/5">
-            <div><span className="text-[#8A8A9D]">Email:</span> admin@gmail.com</div>
-            <div><span className="text-[#8A8A9D]">Pass:</span> Admin@9804</div>
-          </div>
         </div>
       </div>
 
@@ -206,13 +199,23 @@ function LoginForm({ onSwitch, onSuccess }) {
         <SubmitButton loading={loading} label="Sign in to Dashboard" />
       </form>
 
-      <div className="mt-8 text-center pt-2">
-        <span className="text-[13px] text-[#8A8A9D]">
-          Don't have an account?{" "}
-          <button type="button" onClick={onSwitch} className="text-[#8468F5] underline hover:text-[#9B84F8] transition-colors font-medium">
-            Create an account
-          </button>
-        </span>
+      <div className="mt-6">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/10"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-[#1E1E26] text-[#6C6C7D]">New here?</span>
+          </div>
+        </div>
+        
+        <button 
+          type="button" 
+          onClick={onSwitch} 
+          className="w-full mt-6 py-3.5 rounded-xl font-medium text-[15px] bg-[#2A2A36] text-white hover:bg-[#343442] border border-white/10 transition-colors flex justify-center items-center gap-2"
+        >
+          Create a new account
+        </button>
       </div>
     </>
   );
