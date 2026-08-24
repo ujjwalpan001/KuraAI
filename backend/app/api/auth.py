@@ -7,6 +7,8 @@ import hmac
 import hashlib
 import os
 import time
+import asyncio
+import httpx
 from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException
@@ -18,6 +20,18 @@ from app.db.mongodb import get_db
 router = APIRouter()
 
 _SECRET = (settings.admin_password or "whatsagent-secret-key").encode()
+
+
+async def _wake_evolution():
+    """Background task to silently ping Evolution Go so it wakes up from free-tier sleep."""
+    url = settings.evolution_api_url.rstrip("/")
+    if not url:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.get(f"{url}/")
+    except Exception:
+        pass  # We don't care about the result, just waking it up
 
 
 # ── Password helpers ───────────────────────────────────────────────────────────
@@ -112,6 +126,9 @@ async def signup(body: SignupIn):
         "created_at": datetime.utcnow(),
     })
 
+    # Ping Evolution Go to wake it up
+    asyncio.create_task(_wake_evolution())
+
     token = _make_token(user_id)
     return {"token": token, "name": name, "email": email}
 
@@ -124,6 +141,9 @@ async def login(body: LoginIn):
     user = await db.users.find_one({"email": email})
     if not user or not _verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Ping Evolution Go to wake it up
+    asyncio.create_task(_wake_evolution())
 
     token = _make_token(user["user_id"])
     return {"token": token, "name": user["name"], "email": user["email"]}
