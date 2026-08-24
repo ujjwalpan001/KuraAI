@@ -138,13 +138,26 @@ async def create_instance(instance_name: str, webhook_url: str) -> dict:
 
 async def get_qr_code(instance_name: str) -> dict:
     """Fetch the current QR code for an instance. Returns base64 image."""
-    return await _get_instance(instance_name, "/instance/qr")
+    result = await _get_instance(instance_name, "/instance/qr")
+    if "data" in result and isinstance(result["data"], dict):
+        data = result["data"]
+        return {"base64": data.get("qrcode"), "code": data.get("code")}
+    return result
 
 
 async def get_connection_state(instance_name: str) -> dict:
     """Check if an instance is connected (open/connecting/close)."""
     try:
-        return await _get_instance(instance_name, "/instance/status")
+        result = await _get_instance(instance_name, "/instance/status")
+        if "data" in result and isinstance(result["data"], dict):
+            data = result["data"]
+            if data.get("LoggedIn"):
+                return {"instance": {"state": "open"}}
+            elif data.get("Connected"):
+                return {"instance": {"state": "connecting"}}
+            else:
+                return {"instance": {"state": "close"}}
+        return result
     except Exception as e:
         return {"state": "error", "error": str(e)}
 
