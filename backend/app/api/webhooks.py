@@ -77,6 +77,7 @@ def _extract_message(payload: dict) -> dict | None:
             remote_jid = info.get("Chat", "")
             message_id = info.get("ID", "")
             push_name = info.get("PushName", "")
+            sender_alt_jid = info.get("SenderAlt", "")
             
             # Infer message_type for Go
             if "conversation" in message:
@@ -97,6 +98,7 @@ def _extract_message(payload: dict) -> dict | None:
             message_id = key.get("id", "")
             push_name = data.get("pushName", "")
             message_type = data.get("messageType", "")
+            sender_alt_jid = ""
 
         # Instead of ignoring messages sent BY the bot/us, we pass them through 
         # so they can be synced to the Live Chats dashboard as OUTBOUND messages.
@@ -151,6 +153,7 @@ def _extract_message(payload: dict) -> dict | None:
             "timestamp": str(data.get("timestamp") or data.get("Info", {}).get("Timestamp", "")),
             "push_name": push_name,
             "from_me": from_me,
+            "sender_alt_phone": _extract_phone(sender_alt_jid) if sender_alt_jid else None,
         }
     except (KeyError, IndexError, TypeError) as e:
         logger.debug(f"Could not extract message from payload: {e}")
@@ -441,6 +444,20 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     if not tenant_id:
         logger.warning("No tenant could be resolved — ignoring")
         return Response(status_code=200)
+
+    # WhatsApp LID (Local ID) Swap Fix:
+    # If the user started a chat outbound to a hidden LID, a session was created for the LID.
+    # When the customer replies, Evolution Go reveals their Real Number and moves the LID to SenderAlt.
+    # We must merge them by updating the old LID session to the Real Number!
+    sender_alt = message_data.get("sender_alt_phone")
+    if sender_alt and sender_alt != message_data["customer_phone"]:
+        existing_lid = await db.chat_sessions.find_one({"customer_phone": sender_alt, "tenant_id": tenant_id})
+        if existing_lid:
+            logger.info(f"Merging LID session {sender_alt} into real phone {message_data['customer_phone']}")
+            await db.chat_sessions.update_one(
+                {"_id": existing_lid["_id"]},
+                {"$set": {"customer_phone": message_data["customer_phone"]}}
+            )
 
     # Get or create session
     session = await _get_or_create_session(tenant_id, message_data["customer_phone"])
