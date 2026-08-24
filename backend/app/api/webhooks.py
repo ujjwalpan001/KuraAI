@@ -219,7 +219,7 @@ def _best_tenant(text: str, vocab_by_tenant: dict[str, set[str]]) -> str | None:
     return leaders[0] if len(leaders) == 1 else None
 
 
-async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: str):
+async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: str, from_me: bool = False):
     """
     Decide which tenant a customer belongs to. Returns (tenant_id, ask_reply).
     Priority:
@@ -258,19 +258,25 @@ async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: 
         logger.info(f"[TRIAGE] auto-routed unassigned customer to {guess} from message keywords")
         return guess, None
 
+    # If the business owner initiated the chat, default to the first tenant (don't send them a menu!)
+    if from_me:
+        return candidates[0]["tenant_id"], None
+
     nudge = "or just tell me what you need (e.g. a *sofa* or an *oil change*)"
     if len(candidates) <= 6:
         options = "\n".join(f"• {c['name']}" for c in candidates)
-        reply = (
+        ask_reply = (
             "Hi! 👋 Thanks for reaching out. Which business would you like to chat with today?\n\n"
             f"{options}\n\nReply with the name, {nudge}."
         )
     else:
-        reply = (
+        ask_reply = (
             "Hi! 👋 Thanks for reaching out. Please reply with the *name* of the business "
             f"you'd like to reach, {nudge}, and I'll connect you."
         )
-    return None, reply
+        
+    # Assign them to the first tenant temporarily so the chat appears in a dashboard
+    return candidates[0]["tenant_id"], ask_reply
 
 
 async def _handle_switch_command(db, text: str, customer_phone: str, instance_name: str) -> bool:
@@ -440,11 +446,38 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
 
     # Resolve which TENANT this customer belongs to (or ask them if we can't tell).
     tenant_id, ask_reply = await _resolve_or_triage(
-        db, message_data["customer_phone"], instance_name, message_data["text"]
+        db, message_data["customer_phone"], instance_name, message_data["text"], message_data.get("from_me", False)
     )
-    if ask_reply:
+    
+    if ask_reply and tenant_id:
+        # Create session so it shows up in the dashboard
+        session = await _get_or_create_session(tenant_id, message_data["customer_phone"])
+        
+        # Log the customer's unrouted inbound message
+        await db.message_audit_log.insert_one({
+            "message_id": message_data["message_id"],
+            "session_id": session["session_id"],
+            "tenant_id": tenant_id,
+            "direction": "INBOUND",
+            "text_content": message_data["text"],
+            "timestamp": datetime.utcnow()
+        })
+        
+        # Send the triage menu
         await send_text_message(instance_name, message_data["customer_phone"], ask_reply)
+        
+        # Log the triage menu outbound message so it's visible in the dashboard
+        await db.message_audit_log.insert_one({
+            "message_id": f"triage-{uuid4()}",
+            "session_id": session["session_id"],
+            "tenant_id": tenant_id,
+            "direction": "OUTBOUND",
+            "text_content": ask_reply,
+            "timestamp": datetime.utcnow(),
+            "status": "sent"
+        })
         return Response(status_code=200)
+        
     if not tenant_id:
         logger.warning("No tenant could be resolved — ignoring")
         return Response(status_code=200)
