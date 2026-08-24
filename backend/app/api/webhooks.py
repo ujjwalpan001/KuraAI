@@ -153,7 +153,14 @@ def _extract_message(payload: dict) -> dict | None:
             "push_name": push_name,
             "from_me": from_me,
             "sender_alt_phone": _extract_phone(sender_alt_jid) if sender_alt_jid else None,
-            "raw_message_payload": data,
+            "raw_message_payload": {
+                "key": {
+                    "remoteJid": remote_jid,
+                    "fromMe": from_me,
+                    "id": message_id
+                },
+                "message": message
+            },
         }
     except (KeyError, IndexError, TypeError) as e:
         logger.debug(f"Could not extract message from payload: {e}")
