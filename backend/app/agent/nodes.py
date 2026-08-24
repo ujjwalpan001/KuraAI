@@ -316,7 +316,18 @@ async def _handle_inbound_image(state: AgentState, db, img_bytes: bytes) -> None
 # ---------------------------------------------------------------------------
 
 def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | None = None) -> str:
-    prompt = tenant["system_prompt"]
+    base = (tenant.get("system_prompt") or "").strip()
+    if not base:
+        # Fallback: if no system prompt is configured, use a generic one with the tenant name
+        name = tenant.get("name", "this business")
+        base = (
+            f"You are a helpful AI assistant for {name}. "
+            "Be friendly, concise, and professional. "
+            "Answer questions based on the knowledge base provided. "
+            "Never claim to be ChatGPT, Gemini, or any other AI product — you are a custom assistant."
+        )
+        logger.warning(f"[TENANT {tenant.get('tenant_id')}] No system_prompt configured — using fallback.")
+    prompt = base
 
     # Tell the LLM what's in the catalog so it's HONEST about what exists — but CAP the
     # list so a big catalog doesn't bloat the prompt (which blows Groq's per-minute limit).
