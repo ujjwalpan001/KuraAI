@@ -18,6 +18,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
         system_prompt: activeObj.system_prompt || "",
         evolution_instance: activeObj.evolution_instance || "",
         llm_model: activeObj.llm_model || "llama-3.3-70b",
+        personal_numbers: activeObj.personal_numbers || [],
       });
     }
   }, [activeObj]);
@@ -223,6 +224,70 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                     className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y"
                     placeholder="You are a helpful assistant..."
                   />
+                </div>
+              </div>
+
+              {/* Personal Numbers Config */}
+              <div className="bg-surface border border-hair rounded-xl p-6">
+                <h3 className="text-[15px] font-display font-semibold flex items-center gap-2 mb-4">
+                  <Users size={16} className="text-blue-500" /> Personal Numbers (Do Not Disturb)
+                </h3>
+                <p className="text-[13px] text-muted mb-4">
+                  Add personal phone numbers (including country code) that the AI should completely ignore. Messages from these numbers will not trigger auto-replies or be logged.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted font-mono">+</span>
+                      <input 
+                        id="new-personal-number"
+                        placeholder="e.g. 919876543210"
+                        className="w-full pl-8 pr-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const val = e.currentTarget.value.replace(/\D/g, "");
+                            if (val && !(formData.personal_numbers || []).includes(val)) {
+                              setFormData({...formData, personal_numbers: [...(formData.personal_numbers || []), val]});
+                              e.currentTarget.value = "";
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const input = document.getElementById("new-personal-number");
+                        const val = input.value.replace(/\D/g, "");
+                        if (val && !(formData.personal_numbers || []).includes(val)) {
+                          setFormData({...formData, personal_numbers: [...(formData.personal_numbers || []), val]});
+                          input.value = "";
+                        }
+                      }}
+                      className="px-4 py-2 bg-brand/10 text-brand rounded-lg text-[13px] font-medium hover:bg-brand/20 transition-colors shrink-0"
+                    >
+                      Add Number
+                    </button>
+                  </div>
+                  
+                  {formData.personal_numbers && formData.personal_numbers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {formData.personal_numbers.map(num => (
+                        <div key={num} className="flex items-center gap-2 px-3 py-1.5 bg-canvas border border-hair rounded-full text-[12.5px] font-mono text-ink">
+                          <span>+{num}</span>
+                          <button 
+                            onClick={() => setFormData({
+                              ...formData, 
+                              personal_numbers: formData.personal_numbers.filter(n => n !== num)
+                            })}
+                            className="text-muted hover:text-rose-500 transition-colors"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

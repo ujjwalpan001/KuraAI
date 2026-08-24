@@ -305,6 +305,14 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     if not tenant_id:
         return Response(status_code=200)
 
+    # -----------------------------------------------------------------------
+    # PERSONAL NUMBERS (Do Not Disturb)
+    # -----------------------------------------------------------------------
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+    if tenant and customer_phone in tenant.get("personal_numbers", []):
+        logger.debug(f"Ignoring personal number: {customer_phone} for tenant {tenant_id}")
+        return Response(status_code=200)
+
 
     # -----------------------------------------------------------------------
     # LID → REAL PHONE MERGING

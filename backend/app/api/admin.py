@@ -89,6 +89,7 @@ class TenantIn(BaseModel):
     system_prompt: str
     evolution_instance: str | None = None   # Evolution API instance name
     media_library: dict[str, str] = {}
+    personal_numbers: list[str] = []
 
 
 @router.get("/tenants")

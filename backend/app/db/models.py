@@ -10,6 +10,7 @@ class TenantModel(BaseModel):
     system_prompt: str
     evolution_instance: Optional[str] = None
     media_library: dict[str, str]  # keyword -> URL
+    personal_numbers: list[str] = Field(default_factory=list)
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
