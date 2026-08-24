@@ -586,6 +586,16 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     # OUTBOUND (from_me): log to dashboard, set NEEDS_HUMAN on first contact
     # -----------------------------------------------------------------------
     if from_me:
+        # --- CRITICAL: Lock this customer's phone to THIS tenant immediately ---
+        # This ensures when the friend replies, they are always routed back to
+        # the same tenant, preventing cross-tenant conflicts.
+        await db.customer_routing.update_one(
+            {"customer_phone": customer_phone},
+            {"$set": {"customer_phone": customer_phone, "tenant_id": tenant_id}},
+            upsert=True,
+        )
+        logger.info(f"Outbound: locked {customer_phone} → tenant '{tenant_id}' in routing table.")
+
         if not existing_session:
             # Business initiated — silence the bot for this person
             await db.chat_sessions.update_one(
