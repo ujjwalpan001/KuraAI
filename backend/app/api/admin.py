@@ -541,12 +541,7 @@ async def evo_logout_instance(instance_name: str):
 @router.delete("/evolution/instances/{instance_name}")
 async def evo_delete_instance(instance_name: str, tenant_id: str | None = None):
     """Permanently delete an Evolution API instance."""
-    try:
-        result = await wa_client.delete_instance(instance_name)
-    except Exception as e:
-        raise HTTPException(500, f"Failed to delete instance: {e}")
-
-    # Unlink instance from tenant if specified
+    # 1. Unlink instance from tenant first so we don't get stuck if Evolution fails
     if tenant_id:
         db = get_db()
         await db.tenants.update_one(
@@ -554,4 +549,10 @@ async def evo_delete_instance(instance_name: str, tenant_id: str | None = None):
             {"$unset": {"evolution_instance": ""}},
         )
 
-    return {"ok": True, "result": result}
+    # 2. Try to delete from Evolution API
+    try:
+        result = await wa_client.delete_instance(instance_name)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        # Don't block the unlinking if Evolution Go fails (e.g. instance already deleted)
+        return {"ok": True, "warning": f"Unlinked from DB, but failed to delete from Evolution Go: {e}"}
