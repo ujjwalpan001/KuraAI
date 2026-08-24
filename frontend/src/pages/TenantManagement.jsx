@@ -9,6 +9,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
   
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [instances, setInstances] = useState([]);
 
   useEffect(() => {
     if (activeObj) {
@@ -19,6 +20,15 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
       });
     }
   }, [activeObj]);
+
+  useEffect(() => {
+    // Fetch available evolution instances for the dropdown
+    api.evoInstances().then(res => {
+      if (res?.instances) {
+        setInstances(res.instances);
+      }
+    }).catch(err => console.error("Failed to fetch instances:", err));
+  }, []);
 
   const handleSave = async () => {
     if (!activeTenant) return;
@@ -149,13 +159,18 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution Instance Name</label>
-                    <input 
-                      value={formData.evolution_instance || ""} 
+                    <select
+                      value={formData.evolution_instance || ""}
                       onChange={e => setFormData({...formData, evolution_instance: e.target.value})}
-                      placeholder="e.g. my-business-01" 
-                      className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" 
-                    />
-                    <p className="text-[11px] text-muted mt-1">The instance name from your Evolution API server. Go to <strong>WhatsApp Connect</strong> to create and manage instances.</p>
+                      className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono"
+                    >
+                      <option value="">No instance linked</option>
+                      {instances.map(inst => {
+                        const name = inst.name || inst.instanceName;
+                        return <option key={name} value={name}>{name}</option>;
+                      })}
+                    </select>
+                    <p className="text-[11px] text-muted mt-1">Select an active instance from <strong>WhatsApp Connect</strong> to link it to this workspace.</p>
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Status</label>
