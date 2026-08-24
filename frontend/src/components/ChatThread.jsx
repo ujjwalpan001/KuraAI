@@ -12,8 +12,11 @@ function renderText(text) {
   });
 }
 
-const fmtTime = (iso) =>
-  iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+const fmtTime = (iso) => {
+  if (!iso) return "";
+  const str = iso.endsWith("Z") ? iso : iso + "Z";
+  return new Date(str).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
 
 function Media({ msg }) {
   if (!msg.media_url) return null;
@@ -103,7 +106,11 @@ export default function ChatThread({ session, messages, onChanged }) {
   const inbound = messages.filter((m) => m.direction === "INBOUND").length;
   const outbound = messages.filter((m) => m.direction === "OUTBOUND").length;
   const mediaSent = messages.filter((m) => m.direction === "OUTBOUND" && m.media_url).length;
-  const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" }) : "—");
+  const fmtDate = (iso) => {
+    if (!iso) return "—";
+    const str = iso.endsWith("Z") ? iso : iso + "Z";
+    return new Date(str).toLocaleDateString([], { day: "numeric", month: "short" });
+  };
   const firstSeen = messages.length ? fmtDate(messages[0].timestamp) : "—";
 
   return (

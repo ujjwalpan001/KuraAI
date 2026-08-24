@@ -153,6 +153,7 @@ def _extract_message(payload: dict) -> dict | None:
             "push_name": push_name,
             "from_me": from_me,
             "sender_alt_phone": _extract_phone(sender_alt_jid) if sender_alt_jid else None,
+            "raw_message_payload": data,
         }
     except (KeyError, IndexError, TypeError) as e:
         logger.debug(f"Could not extract message from payload: {e}")
@@ -232,11 +233,12 @@ async def _run_agent(message_data: dict, tenant_id: str, session_id: str):
             "customer_phone": message_data["customer_phone"],
             "session_id": session_id,
             "whatsapp_message_id": message_data["message_id"],
-            "inbound_text": message_data["text"] or "(no text)",
+            "inbound_text": message_data.get("text") or "",
             "inbound_media_id": message_data.get("media_id"),
             "inbound_media_type": message_data.get("media_type"),
             "inbound_media_filename": message_data.get("media_filename"),
             "inbound_media_mime": message_data.get("media_mime"),
+            "inbound_raw_message": message_data.get("raw_message_payload"),
             "inbound_image_description": None,
             "inbound_doc_summary": None,
             "tenant_config": tenant,

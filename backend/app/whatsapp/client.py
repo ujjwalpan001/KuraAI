@@ -202,19 +202,15 @@ async def list_instances() -> list:
 # Media download (for inbound media from Evolution API)
 # ---------------------------------------------------------------------------
 
-async def get_media_base64(instance_name: str, message_id: str, convert_to_mp4: bool = False) -> dict:
+async def get_media_base64(instance_name: str, raw_message: dict, convert_to_mp4: bool = False) -> dict:
     """
     Download media from an inbound message as base64.
     Evolution Go endpoint: POST /chat/getBase64FromMediaMessage/{instance}
-    Body: { "message": { "key": { "id": "<message_id>" } }, "convertToMp4": false }
-    Returns: { "base64": "...", "mimetype": "image/jpeg" }
     """
     url = f"{_evo_base()}/chat/getBase64FromMediaMessage/{instance_name}"
     headers = {"apikey": settings.evolution_api_key, "Content-Type": "application/json"}
     payload = {
-        "message": {
-            "key": {"id": message_id}
-        },
+        "message": raw_message,
         "convertToMp4": convert_to_mp4
     }
     async with httpx.AsyncClient(timeout=30.0) as client:

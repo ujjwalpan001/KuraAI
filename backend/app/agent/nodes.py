@@ -182,7 +182,8 @@ async def context_retriever_node(state: AgentState) -> AgentState:
                 (state.get("tenant_config") or {}).get("evolution_instance")
                 or "default"
             )
-            media_resp = await wa.get_media_base64(instance_name, state["inbound_media_id"])
+            raw_msg = state.get("inbound_raw_message") or {}
+            media_resp = await wa.get_media_base64(instance_name, raw_msg)
             b64_data = media_resp.get("base64", "")
             if b64_data:
                 import base64
