@@ -28,7 +28,6 @@ Evolution API sends webhooks in this format for inbound messages:
 import json
 import logging
 import re
-from collections import Counter
 from datetime import datetime
 from uuid import uuid4
 
@@ -160,279 +159,42 @@ def _extract_message(payload: dict) -> dict | None:
         return None
 
 
-# Generic retail words that don't identify a specific brand.
-_STOPWORDS = {
-    "store", "stores", "services", "service", "care", "company", "shop", "the", "and",
-    "for", "ltd", "inc", "llp", "pvt", "limited", "private", "solutions", "group",
-    "world", "house", "hub", "center", "centre", "online", "official",
-}
-
-
-def _signals_from(*phrases) -> set[str]:
-    """Turn keywords/names into routing signals."""
-    out: set[str] = set()
-    for p in phrases:
-        p = (p or "").lower().strip()
-        if len(p) >= 3:
-            out.add(p)
-        for w in re.split(r"[\s/_\-]+", p):
-            if len(w) >= 3 and w not in _STOPWORDS:
-                out.add(w)
-    return {s for s in out if s not in _STOPWORDS}
-
-
-async def _tenant_vocab(db, tenant: dict) -> set[str]:
-    """Build vocabulary for a tenant for routing."""
-    sig = _signals_from(*(tenant.get("media_library") or {}).keys())
-    sig |= _signals_from(tenant.get("switch_code"), tenant["name"])
-    items = await db.catalog_items.find(
-        {"tenant_id": tenant["tenant_id"]}, {"_id": 0, "name": 1}
-    ).to_list(None)
-    sig |= _signals_from(*[it.get("name") for it in items])
-    return sig
-
-
-def _best_tenant(text: str, vocab_by_tenant: dict[str, set[str]]) -> str | None:
+async def _resolve_tenant(db, instance_name: str, customer_phone: str, sender_alt_phone: str = None) -> str | None:
     """
-    Confident auto-route: only discriminating signals count.
-    """
-    t = (text or "").lower()
-    if not t.strip():
-        return None
-    counts = Counter(s for vocab in vocab_by_tenant.values() for s in vocab)
-    scores: dict[str, int] = {}
-    for tid, vocab in vocab_by_tenant.items():
-        score = sum(
-            1 for s in vocab
-            if counts[s] == 1 and re.search(rf"\b{re.escape(s)}\b", t)
-        )
-        if score:
-            scores[tid] = score
-    if not scores:
-        return None
-    top = max(scores.values())
-    leaders = [tid for tid, sc in scores.items() if sc == top]
-    return leaders[0] if len(leaders) == 1 else None
-
-
-async def _resolve_or_triage(
-    db, customer_phone: str, instance_name: str, text: str,
-    from_me: bool = False, sender_alt_phone: str = None
-):
-    """
-    Decide which tenant a customer belongs to.
-    Returns (tenant_id_or_None, ask_reply_or_None, all_candidates_list).
+    Simple 1:1 routing: each WhatsApp instance belongs to exactly one tenant.
 
     Priority:
-      1. Explicit routing (customer_routing) validated against current instance
-      2. Also check routing under LID (sender_alt_phone) for LID-swap scenarios
-      3. Existing session (sticky)
-      4. Instance uniquely owned by one tenant
-      5. Keyword auto-guess
-      6. from_me - first tenant silently
-      7. Shared unresolved - triage menu in ALL dashboards
+      1. Direct instance -> tenant lookup (primary, fastest path)
+      2. Existing session lookup (handles LID-swap: friend replies with real phone
+         but session was created under the LID)
+      3. LID session lookup via sender_alt_phone
     """
-    async def _validate_and_get_route(phone: str):
-        """Check routing table. If found, validate tenant still owns this instance. Delete if stale."""
-        route = await db.customer_routing.find_one({"customer_phone": phone})
-        if not route:
-            return None
-        tenant = await db.tenants.find_one({"tenant_id": route["tenant_id"], "is_active": True})
-        if not tenant:
-            # Tenant deleted — remove stale routing
-            await db.customer_routing.delete_one({"customer_phone": phone})
-            logger.warning(f"Deleted stale routing for {phone}: tenant '{route['tenant_id']}' not found")
-            return None
-        # Check if the tenant is still connected to this WhatsApp instance
-        if tenant.get("evolution_instance") and tenant["evolution_instance"] != instance_name:
-            # Tenant disconnected from this instance — remove stale routing
-            await db.customer_routing.delete_one({"customer_phone": phone})
-            logger.warning(
-                f"Deleted stale routing for {phone}: tenant '{route['tenant_id']}' "
-                f"is now on instance '{tenant.get('evolution_instance')}', not '{instance_name}'"
-            )
-            return None
-        return route["tenant_id"]
+    # 1. Find the tenant that owns this WhatsApp instance
+    tenant = await db.tenants.find_one({"evolution_instance": instance_name, "is_active": True})
+    if tenant:
+        return tenant["tenant_id"]
 
-    # 1. Check routing for real phone
-    tid = await _validate_and_get_route(customer_phone)
-    if tid:
-        return tid, None, []
-
-    # 2. Also check routing under LID (sender_alt) — handles LID-swap reply scenario
-    if sender_alt_phone and sender_alt_phone != customer_phone:
-        tid = await _validate_and_get_route(sender_alt_phone)
-        if tid:
-            # Found under LID — migrate routing to real phone now
-            await db.customer_routing.update_one(
-                {"customer_phone": sender_alt_phone},
-                {"$set": {"customer_phone": customer_phone}},
-            )
-            logger.info(f"Migrated routing from LID {sender_alt_phone} to real phone {customer_phone}")
-            return tid, None, []
-
-    # 3. Existing session (sticky)
+    # 2. Fall back to existing session (helps with LID scenario)
     existing = await db.chat_sessions.find_one(
         {"customer_phone": customer_phone}, sort=[("last_message_at", -1)]
     )
     if existing:
-        return existing["tenant_id"], None, []
+        return existing["tenant_id"]
 
-    # 4. Instance uniquely owned by one tenant
-    owners = await db.tenants.find(
-        {"evolution_instance": instance_name, "is_active": True}
-    ).to_list(None)
-    if len(owners) == 1:
-        return owners[0]["tenant_id"], None, []
-
-    candidates = owners or await db.tenants.find({"is_active": True}).to_list(None)
-    if not candidates:
-        return None, None, []
-    if len(candidates) == 1:
-        return candidates[0]["tenant_id"], None, []
-
-    # 5. Keyword auto-guess
-    vocab_by_tenant = {c["tenant_id"]: await _tenant_vocab(db, c) for c in candidates}
-    guess = _best_tenant(text, vocab_by_tenant)
-    if guess:
-        logger.info(f"[TRIAGE] auto-routed unassigned customer to {guess} from message keywords")
-        return guess, None, []
-
-    # 6. Business initiated: assign to first tenant silently
-    if from_me:
-        return candidates[0]["tenant_id"], None, []
-
-    # 7. Shared unresolved → triage menu
-    options = "\n".join(f"• {c['name']}" for c in candidates[:6])
-    ask_reply = (
-        "Hi! 👋 Thanks for reaching out. Which business would you like to chat with today?\n\n"
-        f"{options}\n\nReply with the name and we'll connect you!"
-    )
-    return None, ask_reply, candidates
-
-
-async def _handle_triage_reply(db, customer_phone: str, instance_name: str, text: str) -> bool:
-    """
-    If this customer has TRIAGE_PENDING sessions (from a shared-number welcome),
-    try to match their reply text to a tenant name and route them.
-    Returns True if handled.
-    """
-    pending_sessions = await db.chat_sessions.find(
-        {"customer_phone": customer_phone, "status": "TRIAGE_PENDING"}
-    ).to_list(None)
-    if not pending_sessions:
-        return False
-
-    # Get all candidate tenants from the pending sessions
-    pending_tenant_ids = [s["tenant_id"] for s in pending_sessions]
-    candidates = await db.tenants.find(
-        {"tenant_id": {"$in": pending_tenant_ids}, "is_active": True}
-    ).to_list(None)
-
-    # Try to match the customer's reply to one of the candidate tenant names
-    t = (text or "").lower().strip()
-    matched = None
-    for candidate in candidates:
-        name = candidate["name"].lower()
-        code = (candidate.get("switch_code") or candidate["tenant_id"]).lower()
-        words = set(re.split(r"[\s/_\-]+", name))
-        if t == name or t == code or t in name or any(t == w for w in words if len(w) >= 3):
-            matched = candidate
-            break
-
-    if not matched:
-        # Still can't match — ask again politely
-        options = "\n".join(f"• {c['name']}" for c in candidates)
-        await send_text_message(
-            instance_name, customer_phone,
-            f"Sorry, I didn't catch that! Please reply with one of these:\n\n{options}"
+    # 3. Check LID session
+    if sender_alt_phone and sender_alt_phone != customer_phone:
+        lid_session = await db.chat_sessions.find_one(
+            {"customer_phone": sender_alt_phone}, sort=[("last_message_at", -1)]
         )
-        return True
+        if lid_session:
+            return lid_session["tenant_id"]
 
-    chosen_tid = matched["tenant_id"]
-    logger.info(f"[TRIAGE] Customer {customer_phone} chose tenant '{chosen_tid}'")
-
-    # Save the routing so future messages go directly here
-    await db.customer_routing.update_one(
-        {"customer_phone": customer_phone},
-        {"$set": {"customer_phone": customer_phone, "tenant_id": chosen_tid}},
-        upsert=True,
-    )
-
-    # Activate the chosen session and delete all others
-    for s in pending_sessions:
-        if s["tenant_id"] == chosen_tid:
-            # Activate chosen session
-            await db.chat_sessions.update_one(
-                {"_id": s["_id"]},
-                {"$set": {"status": "WAITING_FOR_BOT"}}
-            )
-        else:
-            # Delete ghost triage sessions from other tenant dashboards
-            await db.message_audit_log.delete_many({"session_id": s["session_id"]})
-            await db.chat_sessions.delete_one({"_id": s["_id"]})
-
-    await send_text_message(
-        instance_name, customer_phone,
-        f"Great! Connecting you to *{matched['name']}* now. How can we help? 😊"
-    )
-    return True
+    logger.warning(f"No tenant found for instance '{instance_name}' — ignoring message")
+    return None
 
 
-async def _handle_switch_command(db, text: str, customer_phone: str, instance_name: str) -> bool:
-    """
-    Lets a customer switch which tenant they talk to:
-      - '#code'           → switch by code
-      - 'switch to Name'  → switch by name
-      - 'switch'          → show picker
-    Returns True if handled (skip agent).
-    """
-    stripped = (text or "").strip()
-    low = stripped.lower()
 
-    if stripped.startswith("#"):
-        target = stripped[1:].strip().lower()
-    elif re.match(r"^switch\b", low):
-        target = re.sub(r"^switch(\s+to)?(\s+(?:a\s+)?(?:business|tenant|brand))?", "", low).strip()
-    else:
-        return False
 
-    tenants = await db.tenants.find({"is_active": True}).to_list(None)
-
-    def _code_of(t):
-        return (t.get("switch_code") or t["tenant_id"]).lower()
-
-    if not target or target in ("help", "tenants", "business", "list"):
-        shown = tenants[:6]
-        opts = "\n".join(f"• {t['name']} — reply *#{_code_of(t)}*" for t in shown)
-        more = "" if len(tenants) <= 6 else f"\n…and {len(tenants) - 6} more."
-        await send_text_message(instance_name, customer_phone,
-            f"Which business would you like to chat with?\n{opts}{more}\n\nReply with its *#code*, or type *switch to <name>*.")
-        return True
-
-    def _matches(t):
-        name = t["name"].lower()
-        words = set(re.split(r"[\s/_\-]+", name))
-        return (_code_of(t) == target or t["tenant_id"].lower() == target
-                or target in name or target in words)
-
-    matches = [t for t in tenants if _matches(t)]
-    if len(matches) != 1:
-        hint = "I couldn't tell which business you meant" if len(matches) > 1 else f"I don't recognise '{target}'"
-        await send_text_message(instance_name, customer_phone,
-            f"{hint}. Type *switch* to see the options.")
-        return True
-    match = matches[0]
-
-    await db.customer_routing.update_one(
-        {"customer_phone": customer_phone},
-        {"$set": {"customer_phone": customer_phone, "tenant_id": match["tenant_id"]}},
-        upsert=True,
-    )
-    await _get_or_create_session(match["tenant_id"], customer_phone)
-    await send_text_message(instance_name, customer_phone,
-        f"You're now chatting with *{match['name']}*. How can we help? 😊")
-    return True
 
 
 async def _get_or_create_session(tenant_id: str, customer_phone: str, initial_status: str = "WAITING_FOR_BOT") -> dict:
@@ -531,55 +293,16 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     from_me = message_data.get("from_me", False)
     customer_phone = message_data["customer_phone"]
 
-    # '#code' / 'switch to X' command handling
-    if not from_me and await _handle_switch_command(db, message_data["text"], customer_phone, instance_name):
-        return Response(status_code=200)
-
-    # Check if customer is in TRIAGE_PENDING (replying to shared-number welcome menu)
-    if not from_me and await _handle_triage_reply(db, customer_phone, instance_name, message_data["text"]):
-        return Response(status_code=200)
-
     # -----------------------------------------------------------------------
-    # RESOLVE TENANT
+    # RESOLVE TENANT — simple 1:1: instance → tenant
     # -----------------------------------------------------------------------
-    tenant_id, ask_reply, triage_candidates = await _resolve_or_triage(
-        db, customer_phone, instance_name, message_data["text"], from_me,
+    tenant_id = await _resolve_tenant(
+        db, instance_name, customer_phone,
         sender_alt_phone=message_data.get("sender_alt_phone"),
     )
-
-    # Shared number, unresolved: show welcome in ALL tenant dashboards with TRIAGE_PENDING status
-    if ask_reply and triage_candidates:
-        ask_msg_id = message_data["message_id"]
-        for i, candidate in enumerate(triage_candidates):
-            tid = candidate["tenant_id"]
-            # Create session as TRIAGE_PENDING so it only shows the welcome, not full chat
-            session = await _get_or_create_session(tid, customer_phone, initial_status="TRIAGE_PENDING")
-            # Log the customer's message in each tenant dashboard
-            await db.message_audit_log.insert_one({
-                "message_id": f"{ask_msg_id}-triage-inbound-{i}",
-                "session_id": session["session_id"],
-                "tenant_id": tid,
-                "direction": "INBOUND",
-                "text_content": message_data["text"],
-                "timestamp": datetime.utcnow(),
-            })
-            # Log the triage welcome reply in each tenant dashboard
-            await db.message_audit_log.insert_one({
-                "message_id": f"triage-outbound-{uuid4()}",
-                "session_id": session["session_id"],
-                "tenant_id": tid,
-                "direction": "OUTBOUND",
-                "text_content": ask_reply,
-                "timestamp": datetime.utcnow(),
-                "status": "sent",
-            })
-        # Send the welcome message once on WhatsApp
-        await send_text_message(instance_name, customer_phone, ask_reply)
-        return Response(status_code=200)
-
     if not tenant_id:
-        logger.warning("No tenant could be resolved — ignoring")
         return Response(status_code=200)
+
 
     # -----------------------------------------------------------------------
     # LID → REAL PHONE MERGING
