@@ -110,10 +110,6 @@ def _extract_message(payload: dict) -> dict | None:
         if "@g.us" in remote_jid:
             return None
 
-        # Skip group messages (group JIDs contain @g.us)
-        if "@g.us" in remote_jid:
-            return None
-
         customer_phone = _extract_phone(remote_jid)
 
         text = ""
@@ -221,62 +217,57 @@ def _best_tenant(text: str, vocab_by_tenant: dict[str, set[str]]) -> str | None:
 
 async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: str, from_me: bool = False):
     """
-    Decide which tenant a customer belongs to. Returns (tenant_id, ask_reply).
+    Decide which tenant a customer belongs to.
+    Returns (tenant_id_or_None, ask_reply_or_None, all_candidates_list).
+
     Priority:
-      1. Explicit routing assignment (customer_routing)            → tenant_id
-      2. Existing session (sticky to their current tenant)         → tenant_id
-      3. A number that uniquely belongs to one tenant (production) → tenant_id
-      4. Shared number + only one tenant exists                    → tenant_id
-      5. Shared number, unassigned: auto-guess from media words    → tenant_id (confident)
-         ...otherwise ask which business                          → ask_reply
+      1. Explicit routing assignment (customer_routing)        → single tenant
+      2. Existing session (sticky)                             → single tenant
+      3. Instance uniquely owned by one tenant                 → single tenant
+      4. Single active tenant                                  → single tenant
+      5. Keyword auto-guess from catalog/media                 → single tenant
+      6. from_me (business initiated)                          → first tenant silently
+      7. Shared unresolved → return ALL candidates + ask_reply → show in ALL dashboards
     """
     route = await db.customer_routing.find_one({"customer_phone": customer_phone})
     if route:
-        return route["tenant_id"], None
+        return route["tenant_id"], None, []
 
     existing = await db.chat_sessions.find_one(
         {"customer_phone": customer_phone}, sort=[("last_message_at", -1)]
     )
     if existing:
-        return existing["tenant_id"], None
+        return existing["tenant_id"], None, []
 
     owners = await db.tenants.find(
         {"evolution_instance": instance_name, "is_active": True}
     ).to_list(None)
     if len(owners) == 1:
-        return owners[0]["tenant_id"], None
+        return owners[0]["tenant_id"], None, []
 
     candidates = owners or await db.tenants.find({"is_active": True}).to_list(None)
     if not candidates:
-        return None, None
+        return None, None, []
     if len(candidates) == 1:
-        return candidates[0]["tenant_id"], None
+        return candidates[0]["tenant_id"], None, []
 
     vocab_by_tenant = {c["tenant_id"]: await _tenant_vocab(db, c) for c in candidates}
     guess = _best_tenant(text, vocab_by_tenant)
     if guess:
         logger.info(f"[TRIAGE] auto-routed unassigned customer to {guess} from message keywords")
-        return guess, None
+        return guess, None, []
 
-    # If the business owner initiated the chat, default to the first tenant (don't send them a menu!)
+    # Business initiated: assign to first tenant silently — no welcome menu
     if from_me:
-        return candidates[0]["tenant_id"], None
+        return candidates[0]["tenant_id"], None, []
 
-    nudge = "or just tell me what you need (e.g. a *sofa* or an *oil change*)"
-    if len(candidates) <= 6:
-        options = "\n".join(f"• {c['name']}" for c in candidates)
-        ask_reply = (
-            "Hi! 👋 Thanks for reaching out. Which business would you like to chat with today?\n\n"
-            f"{options}\n\nReply with the name, {nudge}."
-        )
-    else:
-        ask_reply = (
-            "Hi! 👋 Thanks for reaching out. Please reply with the *name* of the business "
-            f"you'd like to reach, {nudge}, and I'll connect you."
-        )
-        
-    # Assign them to the first tenant temporarily so the chat appears in a dashboard
-    return candidates[0]["tenant_id"], ask_reply
+    options = "\n".join(f"• {c['name']}" for c in candidates[:6])
+    ask_reply = (
+        "Hi! 👋 Thanks for reaching out. Which business would you like to chat with today?\n\n"
+        f"{options}\n\nReply with the name and we'll connect you!"
+    )
+    # Return None as tenant_id + all candidates so the caller can create sessions in ALL dashboards
+    return None, ask_reply, candidates
 
 
 async def _handle_switch_command(db, text: str, customer_phone: str, instance_name: str) -> bool:
@@ -400,17 +391,11 @@ async def _run_agent(message_data: dict, tenant_id: str, session_id: str):
 @router.post("/api/webhooks/whatsapp")
 async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     """
-    Handles Evolution API webhook payloads.
-    Evolution API sends all events to this single endpoint.
-    Authentication: Evolution API sends the apikey as a header — we validate it.
+    Handles Evolution API webhook payloads (Evolution Go + Node.js).
     """
-    # Evolution Go does not send an apikey header in its webhook requests.
-    # Therefore, we rely on the secrecy of the webhook URL endpoint itself.
-
     payload_bytes = await request.body()
     payload = json.loads(payload_bytes) if payload_bytes else {}
 
-    # Log all raw webhooks for debugging
     db = get_db()
     try:
         await db.raw_webhooks.insert_one({"received_at": datetime.utcnow(), "payload": payload})
@@ -419,121 +404,123 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
 
     message_data = _extract_message(payload)
     if not message_data:
-        # Status update, connection event, or unsupported type — acknowledge and ignore
         event = payload.get("event", "unknown")
         logger.debug(f"Webhook received (non-message event: {event}) — ignored")
         return Response(status_code=200)
 
-    db = get_db()
-
-    # IDEMPOTENCY: Evolution API may retry webhooks. Process each message_id exactly once.
+    # IDEMPOTENCY: process each message_id exactly once.
     try:
         await db.processed_webhooks.insert_one({
             "whatsapp_message_id": message_data["message_id"],
             "received_at": datetime.utcnow(),
         })
     except DuplicateKeyError:
-        logger.info(f"Duplicate webhook for {message_data['message_id']} — already processed, skipping")
+        logger.info(f"Duplicate webhook for {message_data['message_id']} — skipping")
         return Response(status_code=200)
 
     instance_name = message_data["instance_name"]
+    from_me = message_data.get("from_me", False)
+    customer_phone = message_data["customer_phone"]
 
-    # Optional: '#code' switches which tenant this customer talks to.
-    if await _handle_switch_command(
-        db, message_data["text"], message_data["customer_phone"], instance_name
-    ):
+    # '#code' / 'switch to X' command handling
+    if not from_me and await _handle_switch_command(db, message_data["text"], customer_phone, instance_name):
         return Response(status_code=200)
 
-    # Resolve which TENANT this customer belongs to (or ask them if we can't tell).
-    tenant_id, ask_reply = await _resolve_or_triage(
-        db, message_data["customer_phone"], instance_name, message_data["text"], message_data.get("from_me", False)
+    # -----------------------------------------------------------------------
+    # RESOLVE TENANT
+    # -----------------------------------------------------------------------
+    tenant_id, ask_reply, triage_candidates = await _resolve_or_triage(
+        db, customer_phone, instance_name, message_data["text"], from_me
     )
-    
-    if ask_reply and tenant_id:
-        # Create session so it shows up in the dashboard
-        session = await _get_or_create_session(tenant_id, message_data["customer_phone"])
-        
-        # Log the customer's unrouted inbound message
-        await db.message_audit_log.insert_one({
-            "message_id": message_data["message_id"],
-            "session_id": session["session_id"],
-            "tenant_id": tenant_id,
-            "direction": "INBOUND",
-            "text_content": message_data["text"],
-            "timestamp": datetime.utcnow()
-        })
-        
-        # Send the triage menu
-        await send_text_message(instance_name, message_data["customer_phone"], ask_reply)
-        
-        # Log the triage menu outbound message so it's visible in the dashboard
-        await db.message_audit_log.insert_one({
-            "message_id": f"triage-{uuid4()}",
-            "session_id": session["session_id"],
-            "tenant_id": tenant_id,
-            "direction": "OUTBOUND",
-            "text_content": ask_reply,
-            "timestamp": datetime.utcnow(),
-            "status": "sent"
-        })
+
+    # Shared number, unresolved: show welcome in ALL tenant dashboards
+    if ask_reply and triage_candidates:
+        ask_msg_id = message_data["message_id"]
+        for i, candidate in enumerate(triage_candidates):
+            tid = candidate["tenant_id"]
+            session = await _get_or_create_session(tid, customer_phone)
+            # Log the customer's message in each tenant dashboard
+            await db.message_audit_log.insert_one({
+                "message_id": f"{ask_msg_id}-triage-inbound-{i}",
+                "session_id": session["session_id"],
+                "tenant_id": tid,
+                "direction": "INBOUND",
+                "text_content": message_data["text"],
+                "timestamp": datetime.utcnow(),
+            })
+            # Log the triage welcome reply in each tenant dashboard
+            await db.message_audit_log.insert_one({
+                "message_id": f"triage-outbound-{uuid4()}",
+                "session_id": session["session_id"],
+                "tenant_id": tid,
+                "direction": "OUTBOUND",
+                "text_content": ask_reply,
+                "timestamp": datetime.utcnow(),
+                "status": "sent",
+            })
+        # Send the welcome message once on WhatsApp
+        await send_text_message(instance_name, customer_phone, ask_reply)
         return Response(status_code=200)
-        
+
     if not tenant_id:
         logger.warning("No tenant could be resolved — ignoring")
         return Response(status_code=200)
 
-    # WhatsApp LID (Local ID) Swap Fix:
-    # If the user started a chat outbound to a hidden LID, a session was created for the LID.
-    # When the customer replies, Evolution Go reveals their Real Number and moves the LID to SenderAlt.
-    # --- CRITICAL FIX: LID Merging ---
+    # -----------------------------------------------------------------------
+    # LID → REAL PHONE MERGING
+    # When the business sends a message to a WhatsApp contact via a business link,
+    # WhatsApp assigns a temporary LID. When the friend replies, Evolution Go
+    # reveals the real phone in 'remote_jid' and puts the LID in 'SenderAlt'.
+    # We merge the ghost LID session into the real phone session here.
+    # -----------------------------------------------------------------------
     sender_alt = message_data.get("sender_alt_phone")
-    if sender_alt and sender_alt != message_data["customer_phone"]:
-        existing_lid = await db.chat_sessions.find_one({"customer_phone": sender_alt, "tenant_id": tenant_id})
-        if existing_lid:
-            logger.info(f"Merging LID session {sender_alt} into real phone {message_data['customer_phone']}")
-            
-            # Does the real phone ALREADY have a session?
-            existing_real = await db.chat_sessions.find_one({"customer_phone": message_data["customer_phone"], "tenant_id": tenant_id})
-            
-            if existing_real:
-                # Move all outbound messages from the LID session into the REAL session
+    if sender_alt and sender_alt != customer_phone:
+        lid_session = await db.chat_sessions.find_one({"customer_phone": sender_alt, "tenant_id": tenant_id})
+        if lid_session:
+            logger.info(f"LID merge: {sender_alt} → {customer_phone} (session {lid_session['session_id']})")
+            real_session = await db.chat_sessions.find_one({"customer_phone": customer_phone, "tenant_id": tenant_id})
+
+            if real_session:
+                # Move ALL messages from LID session into the real session
                 await db.message_audit_log.update_many(
-                    {"session_id": existing_lid["session_id"]},
-                    {"$set": {"session_id": existing_real["session_id"]}}
+                    {"session_id": lid_session["session_id"]},
+                    {"$set": {"session_id": real_session["session_id"]}}
                 )
-                # If the LID session was marked NEEDS_HUMAN, transfer that status to the real session
-                if existing_lid.get("status") == "NEEDS_HUMAN":
+                # Transfer NEEDS_HUMAN status if the LID was in human mode
+                if lid_session.get("status") == "NEEDS_HUMAN":
                     await db.chat_sessions.update_one(
-                        {"_id": existing_real["_id"]},
+                        {"_id": real_session["_id"]},
                         {"$set": {"status": "NEEDS_HUMAN"}}
                     )
                 # Delete the ghost LID session
-                await db.chat_sessions.delete_one({"_id": existing_lid["_id"]})
+                await db.chat_sessions.delete_one({"_id": lid_session["_id"]})
+                logger.info(f"LID merge: moved messages to real session {real_session['session_id']} and deleted ghost.")
             else:
-                # No real session exists yet, just rename the LID session
+                # No real session exists yet — just rename LID session to real phone
                 await db.chat_sessions.update_one(
-                    {"_id": existing_lid["_id"]},
-                    {"$set": {"customer_phone": message_data["customer_phone"]}}
+                    {"_id": lid_session["_id"]},
+                    {"$set": {"customer_phone": customer_phone}}
                 )
+                logger.info(f"LID merge: renamed session to real phone {customer_phone}.")
 
-    # Check if a session already exists before getting/creating one
-    existing_session = await db.chat_sessions.find_one({"customer_phone": message_data["customer_phone"], "tenant_id": tenant_id})
+    # -----------------------------------------------------------------------
+    # GET / CREATE SESSION
+    # -----------------------------------------------------------------------
+    existing_session = await db.chat_sessions.find_one({"customer_phone": customer_phone, "tenant_id": tenant_id})
+    session = await _get_or_create_session(tenant_id, customer_phone)
 
-    # Get or create session
-    session = await _get_or_create_session(tenant_id, message_data["customer_phone"])
-
-    # If this message was sent manually by the business from their physical phone,
-    # just log it to the dashboard and DO NOT run the AI agent!
-    if message_data.get("from_me"):
-        # If the business sent the VERY FIRST message to start the chat,
-        # we automatically put the chat in "Human Mode" so the AI won't reply when the friend answers!
+    # -----------------------------------------------------------------------
+    # OUTBOUND (from_me): log to dashboard, set NEEDS_HUMAN on first contact
+    # -----------------------------------------------------------------------
+    if from_me:
         if not existing_session:
+            # Business initiated — silence the bot for this person
             await db.chat_sessions.update_one(
                 {"session_id": session["session_id"]},
                 {"$set": {"status": "NEEDS_HUMAN"}}
             )
             session["status"] = "NEEDS_HUMAN"
-            logger.info(f"Business initiated chat. Set session {session['session_id']} to NEEDS_HUMAN.")
+            logger.info(f"Business initiated chat → NEEDS_HUMAN for session {session['session_id']}")
 
         await db.message_audit_log.insert_one({
             "message_id": message_data["message_id"],
@@ -549,16 +536,27 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
             "is_read": True,
             "timestamp": datetime.utcnow(),
         })
-        logger.info(f"Logged manual outbound message from phone to session {session['session_id']}")
+        logger.info(f"Outbound phone message logged to session {session['session_id']}")
         return Response(status_code=200)
 
-    # If session needs human — log message but don't run agent
+    # -----------------------------------------------------------------------
+    # INBOUND: if NEEDS_HUMAN just log, else run AI agent
+    # -----------------------------------------------------------------------
     if session["status"] == "NEEDS_HUMAN":
-        logger.info(f"Session {session['session_id']} needs human — skipping agent")
+        # Log the inbound message to the dashboard so it's visible
+        await db.message_audit_log.insert_one({
+            "message_id": message_data["message_id"],
+            "session_id": session["session_id"],
+            "tenant_id": tenant_id,
+            "direction": "INBOUND",
+            "text_content": message_data["text"],
+            "media_type": message_data["media_type"],
+            "media_filename": message_data["media_filename"],
+            "timestamp": datetime.utcnow(),
+        })
+        logger.info(f"Session {session['session_id']} is NEEDS_HUMAN — logged message, skipping agent")
         return Response(status_code=200)
 
-    # RETURN 200 IMMEDIATELY — LangGraph runs in background
-    background_tasks.add_task(
-        _run_agent, message_data, tenant_id, session["session_id"]
-    )
+    # Run AI agent in background
+    background_tasks.add_task(_run_agent, message_data, tenant_id, session["session_id"])
     return Response(status_code=200)
