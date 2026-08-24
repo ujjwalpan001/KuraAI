@@ -215,30 +215,70 @@ def _best_tenant(text: str, vocab_by_tenant: dict[str, set[str]]) -> str | None:
     return leaders[0] if len(leaders) == 1 else None
 
 
-async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: str, from_me: bool = False):
+async def _resolve_or_triage(
+    db, customer_phone: str, instance_name: str, text: str,
+    from_me: bool = False, sender_alt_phone: str = None
+):
     """
     Decide which tenant a customer belongs to.
     Returns (tenant_id_or_None, ask_reply_or_None, all_candidates_list).
 
     Priority:
-      1. Explicit routing assignment (customer_routing)        → single tenant
-      2. Existing session (sticky)                             → single tenant
-      3. Instance uniquely owned by one tenant                 → single tenant
-      4. Single active tenant                                  → single tenant
-      5. Keyword auto-guess from catalog/media                 → single tenant
-      6. from_me (business initiated)                          → first tenant silently
-      7. Shared unresolved → return ALL candidates + ask_reply → show in ALL dashboards
+      1. Explicit routing (customer_routing) validated against current instance
+      2. Also check routing under LID (sender_alt_phone) for LID-swap scenarios
+      3. Existing session (sticky)
+      4. Instance uniquely owned by one tenant
+      5. Keyword auto-guess
+      6. from_me - first tenant silently
+      7. Shared unresolved - triage menu in ALL dashboards
     """
-    route = await db.customer_routing.find_one({"customer_phone": customer_phone})
-    if route:
-        return route["tenant_id"], None, []
+    async def _validate_and_get_route(phone: str):
+        """Check routing table. If found, validate tenant still owns this instance. Delete if stale."""
+        route = await db.customer_routing.find_one({"customer_phone": phone})
+        if not route:
+            return None
+        tenant = await db.tenants.find_one({"tenant_id": route["tenant_id"], "is_active": True})
+        if not tenant:
+            # Tenant deleted — remove stale routing
+            await db.customer_routing.delete_one({"customer_phone": phone})
+            logger.warning(f"Deleted stale routing for {phone}: tenant '{route['tenant_id']}' not found")
+            return None
+        # Check if the tenant is still connected to this WhatsApp instance
+        if tenant.get("evolution_instance") and tenant["evolution_instance"] != instance_name:
+            # Tenant disconnected from this instance — remove stale routing
+            await db.customer_routing.delete_one({"customer_phone": phone})
+            logger.warning(
+                f"Deleted stale routing for {phone}: tenant '{route['tenant_id']}' "
+                f"is now on instance '{tenant.get('evolution_instance')}', not '{instance_name}'"
+            )
+            return None
+        return route["tenant_id"]
 
+    # 1. Check routing for real phone
+    tid = await _validate_and_get_route(customer_phone)
+    if tid:
+        return tid, None, []
+
+    # 2. Also check routing under LID (sender_alt) — handles LID-swap reply scenario
+    if sender_alt_phone and sender_alt_phone != customer_phone:
+        tid = await _validate_and_get_route(sender_alt_phone)
+        if tid:
+            # Found under LID — migrate routing to real phone now
+            await db.customer_routing.update_one(
+                {"customer_phone": sender_alt_phone},
+                {"$set": {"customer_phone": customer_phone}},
+            )
+            logger.info(f"Migrated routing from LID {sender_alt_phone} to real phone {customer_phone}")
+            return tid, None, []
+
+    # 3. Existing session (sticky)
     existing = await db.chat_sessions.find_one(
         {"customer_phone": customer_phone}, sort=[("last_message_at", -1)]
     )
     if existing:
         return existing["tenant_id"], None, []
 
+    # 4. Instance uniquely owned by one tenant
     owners = await db.tenants.find(
         {"evolution_instance": instance_name, "is_active": True}
     ).to_list(None)
@@ -251,22 +291,23 @@ async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: 
     if len(candidates) == 1:
         return candidates[0]["tenant_id"], None, []
 
+    # 5. Keyword auto-guess
     vocab_by_tenant = {c["tenant_id"]: await _tenant_vocab(db, c) for c in candidates}
     guess = _best_tenant(text, vocab_by_tenant)
     if guess:
         logger.info(f"[TRIAGE] auto-routed unassigned customer to {guess} from message keywords")
         return guess, None, []
 
-    # Business initiated: assign to first tenant silently — no welcome menu
+    # 6. Business initiated: assign to first tenant silently
     if from_me:
         return candidates[0]["tenant_id"], None, []
 
+    # 7. Shared unresolved → triage menu
     options = "\n".join(f"• {c['name']}" for c in candidates[:6])
     ask_reply = (
         "Hi! 👋 Thanks for reaching out. Which business would you like to chat with today?\n\n"
         f"{options}\n\nReply with the name and we'll connect you!"
     )
-    # Return None as tenant_id + all candidates so the caller can create sessions in ALL dashboards
     return None, ask_reply, candidates
 
 
@@ -502,7 +543,8 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     # RESOLVE TENANT
     # -----------------------------------------------------------------------
     tenant_id, ask_reply, triage_candidates = await _resolve_or_triage(
-        db, customer_phone, instance_name, message_data["text"], from_me
+        db, customer_phone, instance_name, message_data["text"], from_me,
+        sender_alt_phone=message_data.get("sender_alt_phone"),
     )
 
     # Shared number, unresolved: show welcome in ALL tenant dashboards with TRIAGE_PENDING status
