@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Bot, Key, Phone, Save, Search, Plus } from "lucide-react";
+import { Users, Bot, Key, Phone, Save, Search, Plus, Edit2 } from "lucide-react";
 import { themeFor } from "../tenants";
 import { api } from "../api/client";
 
@@ -10,6 +10,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
   const [instances, setInstances] = useState([]);
+  const [editingInstance, setEditingInstance] = useState(false);
 
   useEffect(() => {
     if (activeObj) {
@@ -159,17 +160,32 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution Instance Name</label>
-                    <select
-                      value={formData.evolution_instance || ""}
-                      onChange={e => setFormData({...formData, evolution_instance: e.target.value})}
-                      className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono"
-                    >
-                      <option value="">No instance linked</option>
-                      {instances.map(inst => {
-                        const name = inst.name || inst.instanceName;
-                        return <option key={name} value={name}>{name}</option>;
-                      })}
-                    </select>
+                    {formData.evolution_instance && !editingInstance ? (
+                      <div className="flex items-center justify-between w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink font-mono">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          {formData.evolution_instance}
+                        </div>
+                        <button onClick={() => setEditingInstance(true)} className="text-muted hover:text-brand transition-colors">
+                          <Edit2 size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.evolution_instance || ""}
+                        onChange={e => {
+                           setFormData({...formData, evolution_instance: e.target.value});
+                           setEditingInstance(false);
+                        }}
+                        className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono"
+                      >
+                        <option value="">No instance linked</option>
+                        {instances.map(inst => {
+                          const name = inst.name || inst.instanceName;
+                          return <option key={name} value={name}>{name}</option>;
+                        })}
+                      </select>
+                    )}
                     <p className="text-[11px] text-muted mt-1">Select an active instance from <strong>WhatsApp Connect</strong> to link it to this workspace.</p>
                   </div>
                   <div>
