@@ -619,10 +619,12 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
         # Log the inbound message to the dashboard so it's visible
         await db.message_audit_log.insert_one({
             "message_id": message_data["message_id"],
+            "whatsapp_message_id": message_data["message_id"],
             "session_id": session["session_id"],
             "tenant_id": tenant_id,
             "direction": "INBOUND",
             "text_content": message_data["text"],
+            "media_url": None,
             "media_type": message_data["media_type"],
             "media_filename": message_data["media_filename"],
             "timestamp": datetime.utcnow(),
