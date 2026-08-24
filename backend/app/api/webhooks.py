@@ -270,6 +270,74 @@ async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: 
     return None, ask_reply, candidates
 
 
+async def _handle_triage_reply(db, customer_phone: str, instance_name: str, text: str) -> bool:
+    """
+    If this customer has TRIAGE_PENDING sessions (from a shared-number welcome),
+    try to match their reply text to a tenant name and route them.
+    Returns True if handled.
+    """
+    pending_sessions = await db.chat_sessions.find(
+        {"customer_phone": customer_phone, "status": "TRIAGE_PENDING"}
+    ).to_list(None)
+    if not pending_sessions:
+        return False
+
+    # Get all candidate tenants from the pending sessions
+    pending_tenant_ids = [s["tenant_id"] for s in pending_sessions]
+    candidates = await db.tenants.find(
+        {"tenant_id": {"$in": pending_tenant_ids}, "is_active": True}
+    ).to_list(None)
+
+    # Try to match the customer's reply to one of the candidate tenant names
+    t = (text or "").lower().strip()
+    matched = None
+    for candidate in candidates:
+        name = candidate["name"].lower()
+        code = (candidate.get("switch_code") or candidate["tenant_id"]).lower()
+        words = set(re.split(r"[\s/_\-]+", name))
+        if t == name or t == code or t in name or any(t == w for w in words if len(w) >= 3):
+            matched = candidate
+            break
+
+    if not matched:
+        # Still can't match — ask again politely
+        options = "\n".join(f"• {c['name']}" for c in candidates)
+        await send_text_message(
+            instance_name, customer_phone,
+            f"Sorry, I didn't catch that! Please reply with one of these:\n\n{options}"
+        )
+        return True
+
+    chosen_tid = matched["tenant_id"]
+    logger.info(f"[TRIAGE] Customer {customer_phone} chose tenant '{chosen_tid}'")
+
+    # Save the routing so future messages go directly here
+    await db.customer_routing.update_one(
+        {"customer_phone": customer_phone},
+        {"$set": {"customer_phone": customer_phone, "tenant_id": chosen_tid}},
+        upsert=True,
+    )
+
+    # Activate the chosen session and delete all others
+    for s in pending_sessions:
+        if s["tenant_id"] == chosen_tid:
+            # Activate chosen session
+            await db.chat_sessions.update_one(
+                {"_id": s["_id"]},
+                {"$set": {"status": "WAITING_FOR_BOT"}}
+            )
+        else:
+            # Delete ghost triage sessions from other tenant dashboards
+            await db.message_audit_log.delete_many({"session_id": s["session_id"]})
+            await db.chat_sessions.delete_one({"_id": s["_id"]})
+
+    await send_text_message(
+        instance_name, customer_phone,
+        f"Great! Connecting you to *{matched['name']}* now. How can we help? 😊"
+    )
+    return True
+
+
 async def _handle_switch_command(db, text: str, customer_phone: str, instance_name: str) -> bool:
     """
     Lets a customer switch which tenant they talk to:
@@ -326,7 +394,7 @@ async def _handle_switch_command(db, text: str, customer_phone: str, instance_na
     return True
 
 
-async def _get_or_create_session(tenant_id: str, customer_phone: str) -> dict:
+async def _get_or_create_session(tenant_id: str, customer_phone: str, initial_status: str = "WAITING_FOR_BOT") -> dict:
     """Atomic get-or-create to avoid race conditions on concurrent messages."""
     db = get_db()
     now = datetime.utcnow()
@@ -337,7 +405,7 @@ async def _get_or_create_session(tenant_id: str, customer_phone: str) -> dict:
                 "session_id": str(uuid4()),
                 "tenant_id": tenant_id,
                 "customer_phone": customer_phone,
-                "status": "WAITING_FOR_BOT",
+                "status": initial_status,
                 "context_vars": {},
                 "message_count": 0,
                 "created_at": now,
@@ -426,6 +494,10 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     if not from_me and await _handle_switch_command(db, message_data["text"], customer_phone, instance_name):
         return Response(status_code=200)
 
+    # Check if customer is in TRIAGE_PENDING (replying to shared-number welcome menu)
+    if not from_me and await _handle_triage_reply(db, customer_phone, instance_name, message_data["text"]):
+        return Response(status_code=200)
+
     # -----------------------------------------------------------------------
     # RESOLVE TENANT
     # -----------------------------------------------------------------------
@@ -433,12 +505,13 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
         db, customer_phone, instance_name, message_data["text"], from_me
     )
 
-    # Shared number, unresolved: show welcome in ALL tenant dashboards
+    # Shared number, unresolved: show welcome in ALL tenant dashboards with TRIAGE_PENDING status
     if ask_reply and triage_candidates:
         ask_msg_id = message_data["message_id"]
         for i, candidate in enumerate(triage_candidates):
             tid = candidate["tenant_id"]
-            session = await _get_or_create_session(tid, customer_phone)
+            # Create session as TRIAGE_PENDING so it only shows the welcome, not full chat
+            session = await _get_or_create_session(tid, customer_phone, initial_status="TRIAGE_PENDING")
             # Log the customer's message in each tenant dashboard
             await db.message_audit_log.insert_one({
                 "message_id": f"{ask_msg_id}-triage-inbound-{i}",
