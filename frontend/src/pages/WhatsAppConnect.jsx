@@ -11,7 +11,6 @@ const STATE_COLORS = {
   close: "text-rose-400",
   error: "text-rose-400",
 };
-
 const STATE_ICONS = {
   open: CheckCircle2,
   connecting: Loader2,
