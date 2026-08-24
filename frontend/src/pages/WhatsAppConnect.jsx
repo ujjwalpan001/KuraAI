@@ -287,9 +287,14 @@ function CreateInstanceModal({ tenants, onClose, onCreated }) {
               className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand"
             >
               <option value="">— None —</option>
-              {tenants.map(t => (
-                <option key={t.tenant_id} value={t.tenant_id}>{t.name}</option>
-              ))}
+              {tenants.map(t => {
+                const isLinked = !!t.evolution_instance;
+                return (
+                  <option key={t.tenant_id} value={t.tenant_id} disabled={isLinked}>
+                    {t.name} {isLinked ? `(Already linked to ${t.evolution_instance})` : ""}
+                  </option>
+                );
+              })}
             </select>
             <p className="text-[11px] text-muted mt-1">Messages from this WhatsApp number will be routed to this tenant's AI agent.</p>
           </div>

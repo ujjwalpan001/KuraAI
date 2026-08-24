@@ -489,6 +489,10 @@ async def evo_create_instance(body: CreateInstanceIn):
     # Link instance to tenant if specified
     if body.tenant_id:
         db = get_db()
+        tenant = await db.tenants.find_one({"tenant_id": body.tenant_id})
+        if tenant and tenant.get("evolution_instance"):
+            raise HTTPException(400, f"Tenant is already linked to instance '{tenant['evolution_instance']}'. Please unlink it first.")
+            
         await db.tenants.update_one(
             {"tenant_id": body.tenant_id},
             {"$set": {"evolution_instance": body.instance_name}},
