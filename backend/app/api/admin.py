@@ -16,6 +16,7 @@ from app.config import settings
 from app.db.mongodb import get_db
 from app.storage import gridfs
 from app.rag.chroma_client import build_chroma_index, index_upsert, index_remove, catalog_doc_text
+from app.whatsapp import client as wa_client
 
 router = APIRouter(prefix="/api/admin")
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ class TenantIn(BaseModel):
     tenant_id: str
     name: str
     system_prompt: str
-    whatsapp_phone_number_id: str | None = None
+    evolution_instance: str | None = None   # Evolution API instance name
     media_library: dict[str, str] = {}
 
 
@@ -106,7 +107,6 @@ async def admin_create_tenant(body: TenantIn):
     if await db.tenants.find_one({"tenant_id": body.tenant_id}):
         raise HTTPException(409, "A tenant with that id already exists")
     doc = body.model_dump()
-    doc["whatsapp_phone_number_id"] = doc.get("whatsapp_phone_number_id") or settings.meta_phone_number_id
     doc["is_active"] = True
     doc["created_at"] = datetime.utcnow()
     await db.tenants.insert_one(doc)
@@ -455,3 +455,99 @@ async def _vision_describe(image_bytes: bytes, name: str) -> str | None:
     except Exception as e:
         logger.warning(f"Vision auto-describe failed: {e}")
         return None
+
+
+# --------------------------------------------------------------------------- #
+# Evolution API — Instance management
+# --------------------------------------------------------------------------- #
+
+class CreateInstanceIn(BaseModel):
+    instance_name: str
+    tenant_id: str | None = None   # optionally link to a tenant
+
+
+@router.get("/evolution/instances")
+async def evo_list_instances():
+    """List all WhatsApp instances on the Evolution API server."""
+    instances = await wa_client.list_instances()
+    return {"instances": instances}
+
+
+@router.post("/evolution/instances")
+async def evo_create_instance(body: CreateInstanceIn):
+    """
+    Create a new WhatsApp instance on the Evolution API server.
+    The webhook URL is set to our /api/webhooks/whatsapp endpoint.
+    If tenant_id is provided, the instance name is stored on the tenant.
+    """
+    webhook_url = f"{settings.app_base_url}/api/webhooks/whatsapp"
+    try:
+        result = await wa_client.create_instance(body.instance_name, webhook_url)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to create Evolution instance: {e}")
+
+    # Link instance to tenant if specified
+    if body.tenant_id:
+        db = get_db()
+        await db.tenants.update_one(
+            {"tenant_id": body.tenant_id},
+            {"$set": {"evolution_instance": body.instance_name}},
+        )
+
+    return {"ok": True, "instance_name": body.instance_name, "result": result}
+
+
+@router.get("/evolution/instances/{instance_name}/qr")
+async def evo_get_qr(instance_name: str):
+    """Get the QR code (base64) for scanning and connecting WhatsApp."""
+    try:
+        result = await wa_client.get_qr_code(instance_name)
+        return {"ok": True, "qr": result}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get QR code: {e}")
+
+
+@router.get("/evolution/instances/{instance_name}/state")
+async def evo_get_state(instance_name: str):
+    """Check connection state of an instance (open/connecting/close)."""
+    result = await wa_client.get_connection_state(instance_name)
+    return {"ok": True, "state": result}
+
+
+@router.post("/evolution/instances/{instance_name}/restart")
+async def evo_restart_instance(instance_name: str):
+    """Restart (reconnect) an Evolution API instance."""
+    try:
+        result = await wa_client.restart_instance(instance_name)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to restart instance: {e}")
+
+
+@router.post("/evolution/instances/{instance_name}/logout")
+async def evo_logout_instance(instance_name: str):
+    """Log out from WhatsApp on an instance (forces QR re-scan)."""
+    try:
+        result = await wa_client.logout_instance(instance_name)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to logout instance: {e}")
+
+
+@router.delete("/evolution/instances/{instance_name}")
+async def evo_delete_instance(instance_name: str, tenant_id: str | None = None):
+    """Permanently delete an Evolution API instance."""
+    try:
+        result = await wa_client.delete_instance(instance_name)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to delete instance: {e}")
+
+    # Unlink instance from tenant if specified
+    if tenant_id:
+        db = get_db()
+        await db.tenants.update_one(
+            {"tenant_id": tenant_id},
+            {"$unset": {"evolution_instance": ""}},
+        )
+
+    return {"ok": True, "result": result}

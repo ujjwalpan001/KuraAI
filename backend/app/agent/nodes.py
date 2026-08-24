@@ -73,15 +73,22 @@ async def acknowledge_node(state: AgentState) -> AgentState:
     Fires read receipt + typing indicator immediately.
     Saves inbound message to MongoDB.
     """
-    phone_id = state["tenant_config"]["whatsapp_phone_number_id"] if state.get("tenant_config") else settings.meta_phone_number_id
+    # Get the Evolution instance name from tenant config
+    instance_name = (
+        (state.get("tenant_config") or {}).get("evolution_instance")
+        or settings.evolution_api_key and "default"
+        or "default"
+    )
+    customer_phone = state["customer_phone"]
+    remote_jid = f"{customer_phone}@s.whatsapp.net"
 
     try:
-        await wa.send_read_receipt(phone_id, state["whatsapp_message_id"])
+        await wa.send_read_receipt(instance_name, remote_jid, state["whatsapp_message_id"])
     except Exception as e:
         logger.warning(f"Read receipt failed: {e}")
 
     try:
-        await wa.send_typing_indicator(phone_id, state["whatsapp_message_id"])
+        await wa.send_typing_indicator(instance_name, customer_phone)
     except Exception as e:
         logger.warning(f"Typing indicator failed: {e}")
 
@@ -161,25 +168,32 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     else:
         logger.info("[RAG/Chroma] no relevant knowledge found -> LLM answers from system prompt only")
 
-    # Inbound media: download once, then branch on PDF (document RAG) vs image (vision).
+    # Inbound media: download via Evolution API base64 endpoint
     if state.get("inbound_media_id"):
         try:
-            tmp_url = await wa.get_media_url(state["inbound_media_id"])
-            media_bytes = await wa.download_media(tmp_url)
-
-            mime = (state.get("inbound_media_mime") or "").lower()
-            fname = (state.get("inbound_media_filename") or "").lower()
-            is_pdf = (
-                media_bytes[:5] == b"%PDF-"
-                or "pdf" in mime
-                or fname.endswith(".pdf")
-                or (state.get("inbound_media_type") == "document" and not mime.startswith("image/"))
+            instance_name = (
+                (state.get("tenant_config") or {}).get("evolution_instance")
+                or "default"
             )
+            media_resp = await wa.get_media_base64(instance_name, state["inbound_media_id"])
+            b64_data = media_resp.get("base64", "")
+            if b64_data:
+                import base64
+                media_bytes = base64.b64decode(b64_data)
 
-            if is_pdf:
-                await _handle_inbound_pdf(state, db, media_bytes)
-            else:
-                await _handle_inbound_image(state, db, media_bytes)
+                mime = (state.get("inbound_media_mime") or "").lower()
+                fname = (state.get("inbound_media_filename") or "").lower()
+                is_pdf = (
+                    media_bytes[:5] == b"%PDF-"
+                    or "pdf" in mime
+                    or fname.endswith(".pdf")
+                    or (state.get("inbound_media_type") == "document" and not mime.startswith("image/"))
+                )
+
+                if is_pdf:
+                    await _handle_inbound_pdf(state, db, media_bytes)
+                else:
+                    await _handle_inbound_image(state, db, media_bytes)
         except Exception as e:
             logger.warning(f"Inbound media handling failed: {e}")
 
@@ -560,27 +574,29 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
 
 async def dispatcher_node(state: AgentState) -> AgentState:
     """
-    Sends WhatsApp reply (text + optional media).
+    Sends WhatsApp reply (text + optional media) via Evolution API.
     Saves outbound message to MongoDB.
     Updates session status.
-    Typing indicator auto-stops when a message is sent.
     """
-    phone_id = state["tenant_config"]["whatsapp_phone_number_id"]
+    instance_name = (
+        (state.get("tenant_config") or {}).get("evolution_instance")
+        or "default"
+    )
     to = state["customer_phone"]
     db = get_db()
 
     try:
-        await wa.send_text_message(phone_id, to, state["llm_reply"])
+        await wa.send_text_message(instance_name, to, state["llm_reply"])
     except Exception as e:
         logger.error(f"Failed to send text message: {e}")
 
     if state.get("media_to_send"):
         try:
             if state["media_type"] == "IMAGE":
-                await wa.send_image_message(phone_id, to, state["media_to_send"])
+                await wa.send_image_message(instance_name, to, state["media_to_send"])
             elif state["media_type"] == "DOCUMENT":
                 await wa.send_document_message(
-                    phone_id, to, state["media_to_send"], state["media_filename"]
+                    instance_name, to, state["media_to_send"], state["media_filename"]
                 )
         except Exception as e:
             logger.error(f"Failed to send media: {e}")

@@ -127,7 +127,8 @@ async def reply_to_session(session_id: str, body: ReplyIn):
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    await send_text_message(tenant["whatsapp_phone_number_id"], session["customer_phone"], text)
+    instance_name = tenant.get("evolution_instance") or tenant.get("whatsapp_phone_number_id", "default")
+    await send_text_message(instance_name, session["customer_phone"], text)
 
     await db.message_audit_log.insert_one({
         "message_id": str(uuid4()),
@@ -163,8 +164,9 @@ async def broadcast(req: BroadcastRequest):
     results = {"sent": [], "failed": []}
     for phone in req.phone_numbers:
         try:
+            instance_name = tenant.get("evolution_instance") or "default"
             await send_text_message(
-                tenant["whatsapp_phone_number_id"], phone, req.message
+                instance_name, phone, req.message
             )
             results["sent"].append(phone)
         except Exception as e:

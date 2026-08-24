@@ -23,6 +23,7 @@ const NAVIGATION = [
   { id: "broadcasts", label: "Broadcasts", icon: Megaphone },
   { id: "media-library", label: "Media Library", icon: ImageIcon },
   { id: "tenants", label: "Tenants", icon: Users },
+  { id: "whatsapp-connect", label: "WhatsApp Connect", icon: Smartphone },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];

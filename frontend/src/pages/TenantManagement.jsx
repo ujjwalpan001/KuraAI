@@ -14,7 +14,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
     if (activeObj) {
       setFormData({
         system_prompt: activeObj.system_prompt || "",
-        whatsapp_phone_number_id: activeObj.whatsapp_phone_number_id || "",
+        evolution_instance: activeObj.evolution_instance || "",
         llm_model: activeObj.llm_model || "llama-3.3-70b",
       });
     }
@@ -141,24 +141,31 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
             </div>
 
             <div className="space-y-6">
-              {/* WhatsApp Config */}
+              {/* WhatsApp / Evolution Config */}
               <div className="bg-surface border border-hair rounded-xl p-6">
                 <h3 className="text-[15px] font-display font-semibold flex items-center gap-2 mb-4">
                   <Phone size={16} className="text-emerald-500" /> WhatsApp Integration
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Phone Number ID</label>
+                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution Instance Name</label>
                     <input 
-                      value={formData.whatsapp_phone_number_id || ""} 
-                      onChange={e => setFormData({...formData, whatsapp_phone_number_id: e.target.value})}
-                      placeholder="e.g. 1095181447021644" 
+                      value={formData.evolution_instance || ""} 
+                      onChange={e => setFormData({...formData, evolution_instance: e.target.value})}
+                      placeholder="e.g. my-business-01" 
                       className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" 
                     />
+                    <p className="text-[11px] text-muted mt-1">The instance name from your Evolution API server. Go to <strong>WhatsApp Connect</strong> to create and manage instances.</p>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">WhatsApp Business Account ID</label>
-                    <input placeholder="Optional (for templates)" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
+                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Status</label>
+                    <div className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-muted">
+                      {formData.evolution_instance ? (
+                        <span className="text-emerald-400 font-medium">✓ Instance configured — check <strong>WhatsApp Connect</strong> for QR/status</span>
+                      ) : (
+                        <span>No instance linked — connect via <strong>WhatsApp Connect</strong> tab</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

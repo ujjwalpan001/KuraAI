@@ -1,3 +1,30 @@
+"""
+Evolution API webhook handler.
+
+Evolution API sends webhooks in this format for inbound messages:
+{
+  "event": "messages.upsert",
+  "instance": "my-instance-name",
+  "data": {
+    "key": {
+      "remoteJid": "919876543210@s.whatsapp.net",
+      "fromMe": false,
+      "id": "BAE5xxxxxxxxxxxx"
+    },
+    "pushName": "Customer Name",
+    "message": {
+      "conversation": "Hello there",
+      // OR for images:
+      "imageMessage": { "caption": "...", "mimetype": "image/jpeg", ... },
+      // OR for documents:
+      "documentMessage": { "caption": "...", "fileName": "file.pdf", "mimetype": "...", ... }
+    },
+    "messageType": "conversation",
+    "timestamp": 1724500000
+  }
+}
+"""
+
 import json
 import logging
 import re
@@ -5,8 +32,8 @@ from collections import Counter
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Query, Request
-from fastapi.responses import PlainTextResponse, Response
+from fastapi import APIRouter, BackgroundTasks, Header, Request
+from fastapi.responses import Response
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -14,22 +41,49 @@ from app.agent.graph import agent_graph
 from app.agent.state import AgentState
 from app.config import settings
 from app.db.mongodb import get_db
-from app.whatsapp.client import verify_webhook_signature, send_text_message
+from app.whatsapp.client import send_text_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _extract_phone(remote_jid: str) -> str:
+    """Convert '919876543210@s.whatsapp.net' → '919876543210'."""
+    return remote_jid.split("@")[0]
+
+
 def _extract_message(payload: dict) -> dict | None:
-    """Parses Meta webhook payload. Returns None for status updates."""
+    """
+    Parse Evolution API webhook payload.
+    Returns None if it's not an inbound user message.
+    """
     try:
-        value = payload["entry"][0]["changes"][0]["value"]
-        if "statuses" in value or "messages" not in value:
+        event = payload.get("event", "")
+        # Only process new inbound messages
+        if event != "messages.upsert":
             return None
 
-        message = value["messages"][0]
-        metadata = value["metadata"]
-        msg_type = message["type"]
+        data = payload.get("data", {})
+        key = data.get("key", {})
+
+        # Ignore messages sent BY the bot/us
+        if key.get("fromMe", True):
+            return None
+
+        instance_name = payload.get("instance", "")
+        remote_jid = key.get("remoteJid", "")
+        message_id = key.get("id", "")
+
+        if not remote_jid or not message_id:
+            return None
+
+        # Skip group messages (group JIDs contain @g.us)
+        if "@g.us" in remote_jid:
+            return None
+
+        customer_phone = _extract_phone(remote_jid)
+        message = data.get("message", {})
+        message_type = data.get("messageType", "")
 
         text = ""
         media_id = None
@@ -37,35 +91,43 @@ def _extract_message(payload: dict) -> dict | None:
         media_filename = None
         media_mime = None
 
-        if msg_type == "text":
-            text = message["text"]["body"]
-        elif msg_type == "image":
-            media_id = message["image"]["id"]
-            text = message["image"].get("caption", "")
+        if message_type == "conversation":
+            text = message.get("conversation", "")
+        elif message_type == "extendedTextMessage":
+            text = (message.get("extendedTextMessage") or {}).get("text", "")
+        elif message_type == "imageMessage":
+            img = message.get("imageMessage", {})
+            text = img.get("caption", "")
+            media_id = message_id  # Evolution API uses message ID to fetch media
             media_type = "image"
-            media_mime = message["image"].get("mime_type")
-        elif msg_type == "document":
-            media_id = message["document"]["id"]
-            text = message["document"].get("caption", "")
+            media_mime = img.get("mimetype", "image/jpeg")
+        elif message_type == "documentMessage":
+            doc = message.get("documentMessage", {})
+            text = doc.get("caption", "")
+            media_id = message_id
             media_type = "document"
-            media_filename = message["document"].get("filename")
-            media_mime = message["document"].get("mime_type")
+            media_filename = doc.get("fileName", "document.pdf")
+            media_mime = doc.get("mimetype", "application/pdf")
         else:
-            # Unsupported type (audio, video, etc.) — skip
+            # Unsupported type (audio, video, sticker, etc.) — skip
+            logger.debug(f"Unsupported message type: {message_type}")
             return None
 
         return {
-            "phone_number_id": metadata["phone_number_id"],
-            "customer_phone": message["from"],
-            "message_id": message["id"],
+            "instance_name": instance_name,
+            "customer_phone": customer_phone,
+            "remote_jid": remote_jid,
+            "message_id": message_id,
             "text": text,
             "media_id": media_id,
             "media_type": media_type,
             "media_filename": media_filename,
             "media_mime": media_mime,
-            "timestamp": message.get("timestamp"),
+            "timestamp": str(data.get("timestamp", "")),
+            "push_name": data.get("pushName", ""),
         }
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, TypeError) as e:
+        logger.debug(f"Could not extract message from payload: {e}")
         return None
 
 
@@ -78,13 +140,12 @@ _STOPWORDS = {
 
 
 def _signals_from(*phrases) -> set[str]:
-    """Turn keywords/names into routing signals: the full phrase plus its individual
-    words (>=3 chars, minus generic stopwords). 'oil change' -> {'oil change','oil','change'}."""
+    """Turn keywords/names into routing signals."""
     out: set[str] = set()
     for p in phrases:
         p = (p or "").lower().strip()
         if len(p) >= 3:
-            out.add(p)  # keep the full phrase too, so 'oil change' can match as a unit
+            out.add(p)
         for w in re.split(r"[\s/_\-]+", p):
             if len(w) >= 3 and w not in _STOPWORDS:
                 out.add(w)
@@ -92,8 +153,7 @@ def _signals_from(*phrases) -> set[str]:
 
 
 async def _tenant_vocab(db, tenant: dict) -> set[str]:
-    """Everything that could point at this tenant: media keywords, switch code,
-    brand name words, and its catalog product names."""
+    """Build vocabulary for a tenant for routing."""
     sig = _signals_from(*(tenant.get("media_library") or {}).keys())
     sig |= _signals_from(tenant.get("switch_code"), tenant["name"])
     items = await db.catalog_items.find(
@@ -105,9 +165,7 @@ async def _tenant_vocab(db, tenant: dict) -> set[str]:
 
 def _best_tenant(text: str, vocab_by_tenant: dict[str, set[str]]) -> str | None:
     """
-    Confident auto-route. Only 'discriminating' signals count — ones owned by exactly ONE
-    tenant. A word shared by two tenants (e.g. 'price') is ignored, since it tells us nothing.
-    The tenant whose discriminating words appear most in the message wins; a tie -> None (ask).
+    Confident auto-route: only discriminating signals count.
     """
     t = (text or "").lower()
     if not t.strip():
@@ -128,20 +186,16 @@ def _best_tenant(text: str, vocab_by_tenant: dict[str, set[str]]) -> str | None:
     return leaders[0] if len(leaders) == 1 else None
 
 
-async def _resolve_or_triage(db, customer_phone: str, phone_number_id: str, text: str):
+async def _resolve_or_triage(db, customer_phone: str, instance_name: str, text: str):
     """
     Decide which tenant a customer belongs to. Returns (tenant_id, ask_reply).
-    Exactly one of the two is set:
-      - tenant_id set  -> route the message to that tenant
-      - ask_reply set  -> we couldn't tell; send this 'which business?' menu instead
-
     Priority:
-      1. Explicit routing assignment (customer_routing)            -> tenant_id
-      2. Existing session (sticky to their current tenant)         -> tenant_id
-      3. A number that uniquely belongs to one tenant (production) -> tenant_id
-      4. Shared number + only one tenant exists                    -> tenant_id
-      5. Shared number, unassigned: auto-guess from media words    -> tenant_id (confident)
-         ...otherwise ask which business                          -> ask_reply
+      1. Explicit routing assignment (customer_routing)            → tenant_id
+      2. Existing session (sticky to their current tenant)         → tenant_id
+      3. A number that uniquely belongs to one tenant (production) → tenant_id
+      4. Shared number + only one tenant exists                    → tenant_id
+      5. Shared number, unassigned: auto-guess from media words    → tenant_id (confident)
+         ...otherwise ask which business                          → ask_reply
     """
     route = await db.customer_routing.find_one({"customer_phone": customer_phone})
     if route:
@@ -154,12 +208,11 @@ async def _resolve_or_triage(db, customer_phone: str, phone_number_id: str, text
         return existing["tenant_id"], None
 
     owners = await db.tenants.find(
-        {"whatsapp_phone_number_id": phone_number_id, "is_active": True}
+        {"evolution_instance": instance_name, "is_active": True}
     ).to_list(None)
-    if len(owners) == 1:  # this number is dedicated to one tenant -> deterministic
+    if len(owners) == 1:
         return owners[0]["tenant_id"], None
 
-    # Shared (or unowned) number: triage among the candidate tenants.
     candidates = owners or await db.tenants.find({"is_active": True}).to_list(None)
     if not candidates:
         return None, None
@@ -172,9 +225,6 @@ async def _resolve_or_triage(db, customer_phone: str, phone_number_id: str, text
         logger.info(f"[TRIAGE] auto-routed unassigned customer to {guess} from message keywords")
         return guess, None
 
-    # Not confident -> ask the customer which business they want.
-    # Enumerate only when the list is short; at scale (many tenants on one number),
-    # just ask for the name instead of printing an unusable list.
     nudge = "or just tell me what you need (e.g. a *sofa* or an *oil change*)"
     if len(candidates) <= 6:
         options = "\n".join(f"• {c['name']}" for c in candidates)
@@ -190,24 +240,17 @@ async def _resolve_or_triage(db, customer_phone: str, phone_number_id: str, text
     return None, reply
 
 
-async def _handle_switch_command(db, text: str, customer_phone: str, phone_number_id: str) -> bool:
+async def _handle_switch_command(db, text: str, customer_phone: str, instance_name: str) -> bool:
     """
-    Lets a customer change which tenant they're talking to with an explicit command.
-    Proper, scalable format (no list of 50 tenants needed):
-      - '#autocare'                -> switch by code
-      - 'switch to AutoCare'       -> switch by name
-      - 'switch'                   -> show a short picker (capped) + how to choose
-    In production each tenant has its own number, so this is a shared-number helper.
-
-    Returns True if the message was a switch command (handled here, skip the agent).
+    Lets a customer switch which tenant they talk to:
+      - '#code'           → switch by code
+      - 'switch to Name'  → switch by name
+      - 'switch'          → show picker
+    Returns True if handled (skip agent).
     """
-    from app.whatsapp.client import send_text_message
-
     stripped = (text or "").strip()
     low = stripped.lower()
 
-    # Detect intent + extract the target. Only '#...' or a message starting with
-    # 'switch' counts — so normal sentences ('change my oil') never trigger.
     if stripped.startswith("#"):
         target = stripped[1:].strip().lower()
     elif re.match(r"^switch\b", low):
@@ -220,12 +263,11 @@ async def _handle_switch_command(db, text: str, customer_phone: str, phone_numbe
     def _code_of(t):
         return (t.get("switch_code") or t["tenant_id"]).lower()
 
-    # No target -> show a capped picker with the exact format to use.
     if not target or target in ("help", "tenants", "business", "list"):
         shown = tenants[:6]
         opts = "\n".join(f"• {t['name']} — reply *#{_code_of(t)}*" for t in shown)
         more = "" if len(tenants) <= 6 else f"\n…and {len(tenants) - 6} more."
-        await send_text_message(phone_number_id, customer_phone,
+        await send_text_message(instance_name, customer_phone,
             f"Which business would you like to chat with?\n{opts}{more}\n\nReply with its *#code*, or type *switch to <name>*.")
         return True
 
@@ -237,8 +279,8 @@ async def _handle_switch_command(db, text: str, customer_phone: str, phone_numbe
 
     matches = [t for t in tenants if _matches(t)]
     if len(matches) != 1:
-        hint = "I couldn't tell which business you meant" if len(matches) > 1 else f"I don't recognise “{target}”"
-        await send_text_message(phone_number_id, customer_phone,
+        hint = "I couldn't tell which business you meant" if len(matches) > 1 else f"I don't recognise "{target}""
+        await send_text_message(instance_name, customer_phone,
             f"{hint}. Type *switch* to see the options.")
         return True
     match = matches[0]
@@ -248,15 +290,14 @@ async def _handle_switch_command(db, text: str, customer_phone: str, phone_numbe
         {"$set": {"customer_phone": customer_phone, "tenant_id": match["tenant_id"]}},
         upsert=True,
     )
-    # Make sure a session exists so the conversation appears in that tenant's dashboard
     await _get_or_create_session(match["tenant_id"], customer_phone)
-    await send_text_message(phone_number_id, customer_phone,
+    await send_text_message(instance_name, customer_phone,
         f"You're now chatting with *{match['name']}*. How can we help? 😊")
     return True
 
 
 async def _get_or_create_session(tenant_id: str, customer_phone: str) -> dict:
-    """Atomic get-or-create. Avoids a find-then-insert race on concurrent inbound messages."""
+    """Atomic get-or-create to avoid race conditions on concurrent messages."""
     db = get_db()
     now = datetime.utcnow()
     session = await db.chat_sessions.find_one_and_update(
@@ -282,7 +323,6 @@ async def _get_or_create_session(tenant_id: str, customer_phone: str) -> dict:
 async def _run_agent(message_data: dict, tenant_id: str, session_id: str):
     """Background task: runs LangGraph pipeline."""
     try:
-        # Fetch tenant config first (needed in Acknowledge node)
         db = get_db()
         tenant = await db.tenants.find_one({"tenant_id": tenant_id})
 
@@ -315,37 +355,26 @@ async def _run_agent(message_data: dict, tenant_id: str, session_id: str):
 
 
 # ---------------------------------------------------------------------------
-# GET — Meta webhook verification
-# ---------------------------------------------------------------------------
-
-@router.get("/api/webhooks/whatsapp")
-async def verify_webhook(
-    hub_mode: str = Query(alias="hub.mode", default=""),
-    hub_verify_token: str = Query(alias="hub.verify_token", default=""),
-    hub_challenge: str = Query(alias="hub.challenge", default=""),
-):
-    if hub_mode == "subscribe" and hub_verify_token == settings.meta_verify_token:
-        return PlainTextResponse(content=hub_challenge)
-    return Response(status_code=403)
-
-
-# ---------------------------------------------------------------------------
-# POST — Receive inbound messages
+# POST — Receive Evolution API webhooks
 # ---------------------------------------------------------------------------
 
 @router.post("/api/webhooks/whatsapp")
 async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
-    # Bonus B1: signature validation FIRST.
-    # Enforce when META_APP_SECRET is configured — reject if header missing or invalid.
-    payload_bytes = await request.body()
-    signature = request.headers.get("X-Hub-Signature-256", "")
-    if settings.meta_app_secret:
-        if not verify_webhook_signature(payload_bytes, signature):
-            logger.warning("Invalid/missing webhook signature — rejected")
-            return Response(status_code=403)
+    """
+    Handles Evolution API webhook payloads.
+    Evolution API sends all events to this single endpoint.
+    Authentication: Evolution API sends the apikey as a header — we validate it.
+    """
+    # Validate the Evolution API key header
+    apikey = request.headers.get("apikey", "")
+    if settings.evolution_api_key and apikey != settings.evolution_api_key:
+        logger.warning("Invalid Evolution API key in webhook header — rejected")
+        return Response(status_code=403)
 
+    payload_bytes = await request.body()
     payload = json.loads(payload_bytes) if payload_bytes else {}
-    
+
+    # Log all raw webhooks for debugging
     db = get_db()
     try:
         await db.raw_webhooks.insert_one({"received_at": datetime.utcnow(), "payload": payload})
@@ -354,13 +383,14 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
 
     message_data = _extract_message(payload)
     if not message_data:
-        # Status update or unsupported type — acknowledge and ignore
+        # Status update, connection event, or unsupported type — acknowledge and ignore
+        event = payload.get("event", "unknown")
+        logger.debug(f"Webhook received (non-message event: {event}) — ignored")
         return Response(status_code=200)
 
     db = get_db()
 
-    # IDEMPOTENCY: Meta retries webhooks. Process each message_id exactly once.
-    # Atomic unique insert; on duplicate, this is a retry — skip silently.
+    # IDEMPOTENCY: Evolution API may retry webhooks. Process each message_id exactly once.
     try:
         await db.processed_webhooks.insert_one({
             "whatsapp_message_id": message_data["message_id"],
@@ -370,19 +400,20 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
         logger.info(f"Duplicate webhook for {message_data['message_id']} — already processed, skipping")
         return Response(status_code=200)
 
-    # Optional one-phone helper: '#code' switches which tenant this customer talks to.
+    instance_name = message_data["instance_name"]
+
+    # Optional: '#code' switches which tenant this customer talks to.
     if await _handle_switch_command(
-        db, message_data["text"], message_data["customer_phone"], message_data["phone_number_id"]
+        db, message_data["text"], message_data["customer_phone"], instance_name
     ):
         return Response(status_code=200)
 
-    # Resolve which TENANT this customer belongs to (or ask them, if we can't tell).
+    # Resolve which TENANT this customer belongs to (or ask them if we can't tell).
     tenant_id, ask_reply = await _resolve_or_triage(
-        db, message_data["customer_phone"], message_data["phone_number_id"], message_data["text"]
+        db, message_data["customer_phone"], instance_name, message_data["text"]
     )
     if ask_reply:
-        # Unassigned customer on a shared number, message not confident enough to route.
-        await send_text_message(message_data["phone_number_id"], message_data["customer_phone"], ask_reply)
+        await send_text_message(instance_name, message_data["customer_phone"], ask_reply)
         return Response(status_code=200)
     if not tenant_id:
         logger.warning("No tenant could be resolved — ignoring")

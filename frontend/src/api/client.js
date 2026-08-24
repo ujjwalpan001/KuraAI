@@ -149,4 +149,17 @@ export const api = {
   },
   deleteKnowledgeBySource: (id, sourcePdf) =>
     send(`/api/admin/tenants/${id}/knowledge/by-source?source_pdf=${encodeURIComponent(sourcePdf)}`, "DELETE"),
+
+  // Evolution API — instance management
+  evoInstances: () => get("/api/admin/evolution/instances"),
+  evoCreateInstance: (instanceName, tenantId) =>
+    send("/api/admin/evolution/instances", "POST", { instance_name: instanceName, tenant_id: tenantId }),
+  evoGetQR: (instanceName) => get(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}/qr`),
+  evoGetState: (instanceName) => get(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}/state`),
+  evoRestartInstance: (instanceName) =>
+    send(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}/restart`, "POST", {}),
+  evoLogoutInstance: (instanceName) =>
+    send(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}/logout`, "POST", {}),
+  evoDeleteInstance: (instanceName, tenantId) =>
+    send(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}?tenant_id=${encodeURIComponent(tenantId || "")}`, "DELETE"),
 };

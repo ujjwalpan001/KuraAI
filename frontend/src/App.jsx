@@ -10,6 +10,7 @@ import Analytics from "./pages/Analytics";
 import Broadcasts from "./pages/Broadcasts";
 import MediaLibrary from "./pages/MediaLibrary";
 import TenantManagement from "./pages/TenantManagement";
+import WhatsAppConnect from "./pages/WhatsAppConnect";
 // Force logout on initial load for demo purposes so the Login page always comes first
 if (!sessionStorage.getItem("demo_init")) {
   logout();
@@ -40,6 +41,8 @@ function Console() {
 
   const renderPage = () => {
     switch (view) {
+      case "whatsapp-connect":
+        return <WhatsAppConnect tenants={tenants} />;
       case "overview":
         return <DashboardOverview tenantId={activeTenant} />;
       case "live-chats":
@@ -57,8 +60,7 @@ function Console() {
            <div className="p-8 max-w-4xl mx-auto">
               <h1 className="text-2xl font-display font-semibold mb-2 text-ink">Settings</h1>
               <p className="text-[14px] text-muted mb-8">Global configuration for the WhatsAgent platform.</p>
-              
-              <div className="space-y-6">
+                            <div className="space-y-6">
                 <div className="bg-surface border border-hair rounded-xl p-6">
                   <h3 className="text-[15px] font-display font-semibold mb-4">Global API Keys</h3>
                   <div className="space-y-4">
@@ -67,8 +69,12 @@ function Console() {
                       <input type="password" placeholder="gsk_..." className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Meta Webhook Verify Token</label>
-                      <input type="text" placeholder="Your secure token" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
+                      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution API URL</label>
+                      <input type="text" placeholder="http://localhost:8080" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution API Key</label>
+                      <input type="password" placeholder="Your Evolution API global key" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
                     </div>
                   </div>
                   <button className="mt-6 bg-surface border border-hair text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-canvas transition-colors">
