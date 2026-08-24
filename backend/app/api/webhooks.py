@@ -55,24 +55,52 @@ def _extract_phone(remote_jid: str) -> str:
 def _extract_message(payload: dict) -> dict | None:
     """
     Parse Evolution API webhook payload.
+    Supports both the classic Node.js API (messages.upsert) and the newer Evolution Go (Message).
     Returns None if it's not an inbound user message.
     """
     try:
         event = payload.get("event", "")
         # Only process new inbound messages
-        if event != "messages.upsert":
+        if event not in ("messages.upsert", "Message"):
             return None
 
+        instance_name = payload.get("instance") or payload.get("instanceName", "")
         data = payload.get("data", {})
-        key = data.get("key", {})
+        
+        # Determine format: Node.js (key/message) vs Go (Info/Message)
+        is_go = "Info" in data and "Message" in data
+        
+        if is_go:
+            info = data.get("Info", {})
+            message = data.get("Message", {})
+            from_me = info.get("IsFromMe", True)
+            remote_jid = info.get("Chat", "")
+            message_id = info.get("ID", "")
+            push_name = info.get("PushName", "")
+            
+            # Infer message_type for Go
+            if "conversation" in message:
+                message_type = "conversation"
+            elif "extendedTextMessage" in message:
+                message_type = "extendedTextMessage"
+            elif "imageMessage" in message:
+                message_type = "imageMessage"
+            elif "documentMessage" in message:
+                message_type = "documentMessage"
+            else:
+                message_type = "unknown"
+        else:
+            key = data.get("key", {})
+            message = data.get("message", {})
+            from_me = key.get("fromMe", True)
+            remote_jid = key.get("remoteJid", "")
+            message_id = key.get("id", "")
+            push_name = data.get("pushName", "")
+            message_type = data.get("messageType", "")
 
         # Ignore messages sent BY the bot/us
-        if key.get("fromMe", True):
+        if from_me:
             return None
-
-        instance_name = payload.get("instance", "")
-        remote_jid = key.get("remoteJid", "")
-        message_id = key.get("id", "")
 
         if not remote_jid or not message_id:
             return None
@@ -82,12 +110,10 @@ def _extract_message(payload: dict) -> dict | None:
             return None
 
         customer_phone = _extract_phone(remote_jid)
-        message = data.get("message", {})
-        message_type = data.get("messageType", "")
 
         text = ""
         media_id = None
-        media_type = None
+        media_type_str = None
         media_filename = None
         media_mime = None
 
@@ -99,13 +125,13 @@ def _extract_message(payload: dict) -> dict | None:
             img = message.get("imageMessage", {})
             text = img.get("caption", "")
             media_id = message_id  # Evolution API uses message ID to fetch media
-            media_type = "image"
+            media_type_str = "image"
             media_mime = img.get("mimetype", "image/jpeg")
         elif message_type == "documentMessage":
             doc = message.get("documentMessage", {})
             text = doc.get("caption", "")
             media_id = message_id
-            media_type = "document"
+            media_type_str = "document"
             media_filename = doc.get("fileName", "document.pdf")
             media_mime = doc.get("mimetype", "application/pdf")
         else:
@@ -120,11 +146,11 @@ def _extract_message(payload: dict) -> dict | None:
             "message_id": message_id,
             "text": text,
             "media_id": media_id,
-            "media_type": media_type,
+            "media_type": media_type_str,
             "media_filename": media_filename,
             "media_mime": media_mime,
-            "timestamp": str(data.get("timestamp", "")),
-            "push_name": data.get("pushName", ""),
+            "timestamp": str(data.get("timestamp") or data.get("Info", {}).get("Timestamp", "")),
+            "push_name": push_name,
         }
     except (KeyError, IndexError, TypeError) as e:
         logger.debug(f"Could not extract message from payload: {e}")
