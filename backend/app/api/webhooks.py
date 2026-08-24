@@ -98,9 +98,8 @@ def _extract_message(payload: dict) -> dict | None:
             push_name = data.get("pushName", "")
             message_type = data.get("messageType", "")
 
-        # Ignore messages sent BY the bot/us
-        if from_me:
-            return None
+        # Instead of ignoring messages sent BY the bot/us, we pass them through 
+        # so they can be synced to the Live Chats dashboard as OUTBOUND messages.
 
         if not remote_jid or not message_id:
             return None
@@ -151,6 +150,7 @@ def _extract_message(payload: dict) -> dict | None:
             "media_mime": media_mime,
             "timestamp": str(data.get("timestamp") or data.get("Info", {}).get("Timestamp", "")),
             "push_name": push_name,
+            "from_me": from_me,
         }
     except (KeyError, IndexError, TypeError) as e:
         logger.debug(f"Could not extract message from payload: {e}")
@@ -444,6 +444,26 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
 
     # Get or create session
     session = await _get_or_create_session(tenant_id, message_data["customer_phone"])
+
+    # If this message was sent manually by the business from their physical phone,
+    # just log it to the dashboard and DO NOT run the AI agent!
+    if message_data.get("from_me"):
+        await db.message_audit_log.insert_one({
+            "message_id": message_data["message_id"],
+            "session_id": session["session_id"],
+            "tenant_id": tenant_id,
+            "direction": "OUTBOUND",
+            "sender": "PHONE",
+            "text_content": message_data["text"],
+            "media_url": None,
+            "media_type": message_data["media_type"],
+            "media_filename": message_data["media_filename"],
+            "agent_state": "NONE",
+            "is_read": True,
+            "timestamp": datetime.utcnow(),
+        })
+        logger.info(f"Logged manual outbound message from phone to session {session['session_id']}")
+        return Response(status_code=200)
 
     # If session needs human — log message but don't run agent
     if session["status"] == "NEEDS_HUMAN":
