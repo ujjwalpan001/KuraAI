@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Bot, Key, Phone, Save, Search, Plus, Edit2 } from "lucide-react";
+import { Users, Bot, Key, Phone, Save, Search, Plus, Edit2, X } from "lucide-react";
 import { themeFor } from "../tenants";
 import { api } from "../api/client";
 
@@ -166,8 +166,14 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                           {formData.evolution_instance}
                         </div>
-                        <button onClick={() => setEditingInstance(true)} className="text-muted hover:text-brand transition-colors">
-                          <Edit2 size={14} />
+                        <button 
+                          onClick={() => {
+                            setFormData({...formData, evolution_instance: ""});
+                          }} 
+                          className="text-muted hover:text-rose-400 transition-colors"
+                          title="Unlink this instance"
+                        >
+                          <X size={14} />
                         </button>
                       </div>
                     ) : (
