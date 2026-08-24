@@ -209,7 +209,12 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Routing Keyword Match</label>
-                    <input placeholder="e.g. luxury, furniture" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
+                    <input 
+                      value={formData.switch_code || ""}
+                      onChange={e => setFormData({...formData, switch_code: e.target.value})}
+                      placeholder="e.g. luxury, furniture" 
+                      className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" 
+                    />
                   </div>
                 </div>
               </div>
