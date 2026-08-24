@@ -309,9 +309,23 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     # PERSONAL NUMBERS (Do Not Disturb)
     # -----------------------------------------------------------------------
     tenant = await db.tenants.find_one({"tenant_id": tenant_id})
-    if tenant and customer_phone in tenant.get("personal_numbers", []):
-        logger.debug(f"Ignoring personal number: {customer_phone} for tenant {tenant_id}")
-        return Response(status_code=200)
+    if tenant:
+        p_nums = tenant.get("personal_numbers", [])
+        sender_alt = message_data.get("sender_alt_phone")
+        
+        # Check if the real phone or the hidden LID matches a personal number
+        if customer_phone in p_nums or (sender_alt and sender_alt in p_nums):
+            # It's a personal number! Wipe any ghost sessions that might have been created
+            phones_to_wipe = [p for p in (customer_phone, sender_alt) if p]
+            ghost_sessions = await db.chat_sessions.find({"customer_phone": {"$in": phones_to_wipe}}).to_list(None)
+            ghost_ids = [s["session_id"] for s in ghost_sessions]
+            
+            if ghost_ids:
+                await db.chat_sessions.delete_many({"session_id": {"$in": ghost_ids}})
+                await db.message_audit_log.delete_many({"session_id": {"$in": ghost_ids}})
+                logger.info(f"Wiped ghost LID sessions {ghost_ids} for personal number {customer_phone}")
+                
+            return Response(status_code=200)
 
 
     # -----------------------------------------------------------------------
