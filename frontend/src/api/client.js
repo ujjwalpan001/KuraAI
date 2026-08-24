@@ -89,7 +89,7 @@ export function getUser() {
 
 export const api = {
   // monitoring
-  getTenants: () => get("/api/tenants"),
+  getTenants: () => get(`/api/tenants?_t=${Date.now()}`),
   getSessions: (id) => get(`/api/tenants/${id}/sessions`),
   getMessages: (sid) => get(`/api/sessions/${sid}/messages`),
   getStats: (id) => get(`/api/tenants/${id}/stats`),
