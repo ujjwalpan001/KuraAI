@@ -174,7 +174,17 @@ async def logout_instance(instance_name: str) -> dict:
 
 async def delete_instance(instance_name: str) -> dict:
     """Permanently delete an instance."""
-    return await _delete_admin(f"/instance/delete/{instance_name}")
+    instances = await list_instances()
+    instance_id = None
+    for inst in instances:
+        if inst.get("name") == instance_name or inst.get("instanceName") == instance_name:
+            instance_id = inst.get("id") or inst.get("instanceId")
+            break
+            
+    if not instance_id:
+        return {"ok": False, "error": "Instance not found"}
+
+    return await _delete_admin(f"/instance/delete/{instance_id}")
 
 
 async def list_instances() -> list:
