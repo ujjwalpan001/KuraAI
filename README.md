@@ -7,7 +7,7 @@
 > - **Demo Password:** `Admin@9804`
 
 
-This platform goes far beyond a simple wrapper around OpenAI. Built upon **LangGraph**, **Groq (Llama 3.1 & 3.3 Vision)**, and the **Meta WhatsApp Cloud API**, it features a fully asynchronous architecture designed to handle concurrent webhook traffic across hundreds of businesses. It natively executes Retrieval-Augmented Generation (RAG) over business catalogs and PDF documents, and provides a stunning, real-time React dashboard for human oversight.
+This platform goes far beyond a simple wrapper around OpenAI. Built upon **LangGraph**, **Groq (Llama 3.1 & 3.3 Vision)**, and the **Custom WhatsApp Webhook Gateway**, it features a fully asynchronous architecture designed to handle concurrent webhook traffic across hundreds of businesses. It natively executes Retrieval-Augmented Generation (RAG) over business catalogs and PDF documents, and provides a stunning, real-time React dashboard for human oversight.
 
 ---
 
@@ -26,7 +26,7 @@ I approached this assessment with an engineering-first mindset, prioritizing pro
 
 In addition to the core requirements, all three bonus features were fully engineered and integrated into the primary workflow:
 
-1. **Bonus 1: Webhook Security (X-Hub-Signature-256)**: Exposing a public webhook invites malicious traffic. I implemented cryptographic HMAC SHA-256 validation in the webhook router (`X-Hub-Signature-256`). By comparing a hash generated using the local `META_APP_SECRET` against the hash provided in Meta's request headers, the system mathematically guarantees that payloads genuinely originate from Meta and immediately rejects forged requests with a `403 Forbidden` error.
+1. **Bonus 1: Webhook Security**: Exposing a public webhook invites malicious traffic. I implemented robust API Key validation in the webhook router. By comparing the `apikey` provided in the request headers against the local secret, the system guarantees that payloads genuinely originate from the authorized WhatsApp Webhook Gateway and immediately rejects forged requests with a `403 Forbidden` error.
 2. **Bonus 2: Multimodal Inbound Vision**: When a customer sends an image (e.g., a photo of a broken product), the pipeline dynamically intercepts the bytes and passes them to **Groq Llama 3.2 Vision**. The Vision model generates a semantic description of the image, which is instantly injected into the LLM conversational state before the main reasoning node triggers.
 3. **Bonus 3: Sentiment & Frustration Escalation**: The LLM's system prompt actively monitors user sentiment. If a user exhibits frustration, anger, or explicitly demands human intervention, the LLM autonomously triggers the `escalate_to_human` tool. This halts all further auto-replies, updates the database enum to `NEEDS_HUMAN`, and flags the conversation red on the dashboard.
 
@@ -36,7 +36,7 @@ In addition to the core requirements, all three bonus features were fully engine
 
 The stack was chosen specifically for low-latency AI messaging and stateless containerized deployment:
 
-* **FastAPI (Python)**: Acts as the core backend router. Chosen for its native asynchronous capabilities and background task offloading, which is critical for surviving Meta's strict webhook timeout windows.
+* **FastAPI (Python)**: Acts as the core backend router. Chosen for its native asynchronous capabilities and background task offloading, which is critical for surviving the gateway's strict webhook timeout windows.
 * **LangGraph**: Serves as the AI orchestration layer. Chosen over LangChain's default agents because it allows defining cyclic graphs as deterministic state machines, ensuring the AI never goes off-script.
 * **Groq (LPU Inference)**: Powering both text (Llama 3.1 8B) and vision (Llama 3.2 11B). Chosen because WhatsApp users abandon bots if they have to wait 5+ seconds for a reply. Groq's blazing-fast Time-To-First-Token (TTFT) keeps the chat feeling instantaneous.
 * **React + Vite + TailwindCSS**: The frontend dashboard stack. Chosen for rapid UI iteration, incredibly fast HMR during development, and minimal bundle sizes for production.
@@ -47,7 +47,7 @@ The stack was chosen specifically for low-latency AI messaging and stateless con
 
 ## 🏗️ System Architecture & LangGraph Breakdown
 
-The platform leverages an asynchronous, event-driven architecture to ensure webhook endpoints respond within Meta's stringent timeout limits, while complex LLM reasoning happens reliably in the background.
+The platform leverages an asynchronous, event-driven architecture to ensure webhook endpoints respond within the gateway's stringent timeout limits, while complex LLM reasoning happens reliably in the background.
 
 ```mermaid
 flowchart TD
@@ -59,18 +59,18 @@ flowchart TD
     classDef db fill:#38a169,stroke:#fff,stroke-width:2px,color:#fff;
 
     Customer((Customer\nWhatsApp)):::external
-    MetaAPI[Meta Cloud API]:::external
+    GatewayAPI[WhatsApp Webhook Gateway]:::external
     Dashboard((React Dashboard\nLive Inbox)):::external
 
-    Customer -- "Sends Text/Image/PDF" --> MetaAPI
+    Customer -- "Sends Text/Image/PDF" --> GatewayAPI
 
     subgraph Phase1 [Phase 1: High-Speed Webhook Intake]
         Webhook{FastAPI Webhook\nEndpoint}:::api
         MongoQueue[(MongoDB:\nProcessed Webhooks)]:::db
         
-        MetaAPI -- "POST Event Payload" --> Webhook
+        GatewayAPI -- "POST Event Payload" --> Webhook
         Webhook -- "1. Idempotency Check" --> MongoQueue
-        Webhook -- "2. Return 200 OK (< 1s)" --> MetaAPI
+        Webhook -- "2. Return 200 OK (< 1s)" --> GatewayAPI
     end
 
     subgraph Phase2 [Phase 2: LangGraph Agent Pipeline]
@@ -84,7 +84,7 @@ flowchart TD
         Webhook -- "3. Start Agent Workflow" --> AgentStart
         AgentStart --> NodeAck
         
-        NodeAck -- "Send Typing Indicator" --> MetaAPI
+        NodeAck -- "Send Typing Indicator" --> GatewayAPI
         NodeAck --> NodeContext
         NodeContext --> NodeReason
         NodeReason -- "Loops until tools finish" --> NodeReason
@@ -103,7 +103,7 @@ flowchart TD
     NodeReason -- "Context + Tool Schema" --> Groq
     Groq -- "Generates Tool Calls / Final Answer" --> NodeReason
     
-    NodeDispatch -- "Send Final Output" --> MetaAPI
+    NodeDispatch -- "Send Final Output" --> GatewayAPI
     NodeDispatch -- "Update Chat History" --> MongoState
     
     MongoState -- "Polls active sessions" --> Dashboard
@@ -153,7 +153,7 @@ The `llm_reasoning_node` grants the LLM access to specific bound tools, allowing
 
 During development, several crucial engineering decisions were made to prioritize speed, reliability, and enterprise scale:
 
-1. **FastAPI Background Tasks**: Meta's webhook system strictly demands a `200 OK` response within a few seconds, otherwise it will drop the webhook and retry later. Because LangGraph LLM inference can take 2-4 seconds, processing the webhook synchronously is dangerous. I utilized FastAPI `BackgroundTasks` to instantly respond to Meta, while the LangGraph pipeline executes in a detached async thread.
+1. **FastAPI Background Tasks**: the gateway's webhook system strictly demands a `200 OK` response within a few seconds, otherwise it will drop the webhook and retry later. Because LangGraph LLM inference can take 2-4 seconds, processing the webhook synchronously is dangerous. I utilized FastAPI `BackgroundTasks` to instantly respond to Meta, while the LangGraph pipeline executes in a detached async thread.
 2. **Idempotency with MongoDB**: Because webhooks can occasionally double-fire over the network, I implemented a `processed_webhooks` collection. By storing every incoming `message_id`, the system performs an atomic check. If a duplicate webhook arrives, it is safely ignored, preventing the LLM from spamming the customer twice.
 3. **MongoDB GridFS over AWS S3**: To simplify the deployment footprint and reduce vendor lock-in for this assessment, I opted to use MongoDB GridFS as the primary Blob store for PDF catalogs and customer images. This ensures the backend containers remain entirely stateless and horizontally scalable without needing external S3 buckets.
 
@@ -170,12 +170,10 @@ Create a `.env` file inside the `backend` folder and populate it with the follow
 MONGO_URI=mongodb://localhost:27017/  # Or your MongoDB Atlas URI
 MONGO_DB_NAME=whatsapp_agent
 
-# Meta WhatsApp Cloud API (From Facebook Developer Portal)
-# NOTE: Ensure your personal phone number is added to the "To" field in Meta's API setup!
-META_PHONE_NUMBER_ID=your_phone_number_id
-META_ACCESS_TOKEN=your_permanent_or_temporary_access_token
-META_VERIFY_TOKEN=your_custom_verify_string  # You make this up (e.g. whatsagent@123)
-META_APP_SECRET=your_app_secret  # Required for X-Hub-Signature-256 Webhook Security
+# Custom WhatsApp Webhook Gateway (From Facebook Developer Portal)
+# NOTE: Ensure your personal phone number is added to the "To" field in the gateway's API setup!
+EVOLUTION_API_URL=http://localhost:8080 # Your WhatsApp Webhook Gateway URL
+EVOLUTION_API_KEY=your_global_api_key_here # Shared secret for gateway authentication
 
 # AI Models (Fast & Free Tier via Groq)
 GROQ_API_KEY=gsk_your_groq_key
@@ -229,7 +227,7 @@ For production, the application is intentionally designed to be deployed as sepa
 The backend requires a persistent environment to execute background tasks reliably and maintain ChromaDB vector bindings.
 - **Hosting**: Render Web Service (Python) or a Railway Docker deployment.
 - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- **Networking Requirement**: The backend URL MUST be exposed to the public internet using HTTPS so that Meta's servers can deliver webhook POST requests to `/api/webhooks/whatsapp`.
+- **Networking Requirement**: The backend URL MUST be exposed to the public internet using HTTPS so that the gateway's servers can deliver webhook POST requests to `/api/webhooks/whatsapp`.
 
 ### 2. Frontend (Vite SPA via Vercel / Netlify)
 The frontend is purely static HTML/JS/CSS once built, making edge-network deployment optimal for low-latency dashboard loads.
@@ -241,13 +239,12 @@ The frontend is purely static HTML/JS/CSS once built, making edge-network deploy
 - **Hosting**: MongoDB Atlas (cloud-hosted MongoDB).
 - **Design Choice**: Utilizing a centralized cloud database allows for horizontal scaling of the backend workers. If traffic spikes, Render can spin up 5 backend instances, and they will all seamlessly share state via Atlas and GridFS.
 
-### 4. Meta Webhook Configuration (Going Live)
-Once deployed, the Meta portal must be configured to point to the live server:
-1. Navigate to **WhatsApp > Configuration** in the Meta Developer Portal.
-2. Click Edit next to Webhook.
-3. Set the Callback URL to `https://<your-deployed-backend-url>/api/webhooks/whatsapp`.
-4. Set the Verify Token to match the `META_VERIFY_TOKEN` you placed in your Render environment variables.
-5. Under "Webhook fields", click **Manage** and subscribe strictly to the **messages** event.
+### 4. Webhook Gateway Configuration (Going Live)
+Once deployed, the WhatsApp Webhook Gateway must be configured to point to the live server:
+1. Open your Gateway dashboard or configuration.
+2. Set the Webhook URL to `https://<your-deployed-backend-url>/api/webhooks/whatsapp`.
+3. Ensure the Gateway API Key matches the `EVOLUTION_API_KEY` you placed in your Render environment variables.
+4. Subscribe strictly to the `messages.upsert` event.
 
 ---
 
@@ -255,7 +252,7 @@ Once deployed, the Meta portal must be configured to point to the live server:
 
 | Collection Name | Architecture Purpose |
 |-----------------|----------------------|
-| `tenants` | Core multi-tenant configurations. Stores agent personas, brand details, and unique Meta phone number IDs for webhook routing. |
+| `tenants` | Core multi-tenant configurations. Stores agent personas, brand details, and unique WhatsApp instance names for webhook routing. |
 | `chat_sessions` | Stores active and historical session metadata, including unread counts and the critical `session_status` enum (`WAITING_FOR_BOT`, `NEEDS_HUMAN`, `RESOLVED`). |
 | `message_audit_log` | An append-only ledger of every inbound and outbound message. Used for rendering the Live Inbox in the dashboard and compliance auditing. |
 | `knowledge_docs` | Reference pointers for PDF documents ingested into the ChromaDB vector space. |

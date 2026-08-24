@@ -8,7 +8,7 @@ class TenantModel(BaseModel):
     tenant_id: str
     name: str
     system_prompt: str
-    whatsapp_phone_number_id: str
+    evolution_instance: Optional[str] = None
     media_library: dict[str, str]  # keyword -> URL
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)

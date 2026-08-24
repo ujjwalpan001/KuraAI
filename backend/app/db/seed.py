@@ -28,7 +28,7 @@ TENANT_A = {
         "- Never invent prices, dimensions, or policies.\n"
         "- Don't repeat the same greeting every message — you remember the conversation."
     ),
-    "whatsapp_phone_number_id": settings.meta_phone_number_id,
+    "evolution_instance": "demo_furniture",
     "switch_code": "furniture",
     "media_library": {
         "catalog": f"{settings.app_base_url}/static/furniture_catalog.pdf",
@@ -64,7 +64,7 @@ TENANT_B = {
         "- Never make up prices or guarantee fixes you can't confirm.\n"
         "- Don't re-introduce yourself every message — keep the conversation flowing naturally."
     ),
-    "whatsapp_phone_number_id": settings.meta_phone_number_id,
+    "evolution_instance": "demo_autocare",
     "switch_code": "autocare",
     "media_library": {
         "invoice": f"{settings.app_base_url}/static/invoice_template.pdf",
@@ -85,7 +85,7 @@ async def ensure_indexes() -> None:
     """
     db = get_db()
     await db.tenants.create_index("tenant_id", unique=True)
-    await db.tenants.create_index("whatsapp_phone_number_id")
+    await db.tenants.create_index("evolution_instance")
 
     await db.chat_sessions.create_index(
         [("tenant_id", 1), ("customer_phone", 1)], unique=True

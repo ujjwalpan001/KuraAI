@@ -279,7 +279,7 @@ async def _handle_switch_command(db, text: str, customer_phone: str, instance_na
 
     matches = [t for t in tenants if _matches(t)]
     if len(matches) != 1:
-        hint = "I couldn't tell which business you meant" if len(matches) > 1 else f"I don't recognise "{target}""
+        hint = "I couldn't tell which business you meant" if len(matches) > 1 else f"I don't recognise '{target}'"
         await send_text_message(instance_name, customer_phone,
             f"{hint}. Type *switch* to see the options.")
         return True

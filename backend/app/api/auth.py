@@ -17,7 +17,7 @@ from app.db.mongodb import get_db
 
 router = APIRouter()
 
-_SECRET = (settings.meta_app_secret or "whatsagent-secret-key").encode()
+_SECRET = (settings.admin_password or "whatsagent-secret-key").encode()
 
 
 # ── Password helpers ───────────────────────────────────────────────────────────

@@ -127,7 +127,7 @@ async def reply_to_session(session_id: str, body: ReplyIn):
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    instance_name = tenant.get("evolution_instance") or tenant.get("whatsapp_phone_number_id", "default")
+    instance_name = tenant.get("evolution_instance") or "default"
     await send_text_message(instance_name, session["customer_phone"], text)
 
     await db.message_audit_log.insert_one({
