@@ -377,7 +377,10 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
         
     prompt += (
         "\n\nIMPORTANT: If the user uses frustrated language, complains, or exhibits a negative sentiment, "
-        "you MUST immediately trigger the escalate_to_human tool so a live agent can take over."
+        "you MUST immediately trigger the escalate_to_human tool so a live agent can take over.\n"
+        "CRITICAL LANGUAGE RULE: If the user writes in Hindi or Nepali using English letters (e.g., Roman Hindi / Roman Nepali / Hinglish), "
+        "you MUST reply in the exact same Roman script (Hinglish/Roman Nepali). Do NOT reply in Devanagari script or pure English. "
+        "Match their transliterated style exactly."
     )
     return prompt
 
