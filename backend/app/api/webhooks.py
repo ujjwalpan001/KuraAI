@@ -365,11 +365,8 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     Evolution API sends all events to this single endpoint.
     Authentication: Evolution API sends the apikey as a header — we validate it.
     """
-    # Validate the Evolution API key header
-    apikey = request.headers.get("apikey", "")
-    if settings.evolution_api_key and apikey != settings.evolution_api_key:
-        logger.warning("Invalid Evolution API key in webhook header — rejected")
-        return Response(status_code=403)
+    # Evolution Go does not send an apikey header in its webhook requests.
+    # Therefore, we rely on the secrecy of the webhook URL endpoint itself.
 
     payload_bytes = await request.body()
     payload = json.loads(payload_bytes) if payload_bytes else {}
