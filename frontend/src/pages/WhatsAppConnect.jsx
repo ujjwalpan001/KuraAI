@@ -32,7 +32,7 @@ function InstanceCard({ instance, tenants, onRefresh }) {
   const [action, setAction] = useState("");
   const pollRef = useRef(null);
 
-  const instanceName = instance?.instance?.instanceName || instance?.instanceName || "";
+  const instanceName = instance?.name || instance?.instance?.instanceName || instance?.instanceName || "";
   const linked = tenants?.find(
     (t) => t.evolution_instance === instanceName
   );
