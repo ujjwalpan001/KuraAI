@@ -22,8 +22,7 @@ _groq_init_done = False
 
 
 async def _groq_create(groq, **kwargs):
-    """Groq chat completion with retry/backoff on transient rate limits (free tier).
-    The Groq SDK is synchronous, so run it in a thread to NOT block the webhook server."""
+    """Groq chat completion with retry/backoff and model fallback."""
     last = None
     for attempt in range(4):
         try:
@@ -31,11 +30,19 @@ async def _groq_create(groq, **kwargs):
         except Exception as e:
             last = e
             m = str(e).lower()
+            
+            # If the user selected a model they don't have access to, fallback instantly
+            if "does not exist" in m or "model_not_found" in m or "no access" in m:
+                logger.warning(f"Groq model {kwargs.get('model')} not accessible. Falling back to llama3-8b-8192.")
+                kwargs["model"] = "llama3-8b-8192"
+                continue
+                
             if any(w in m for w in ("rate", "429", "limit", "timeout", "temporar", "overload", "503")):
                 wait = 2 * (attempt + 1)
                 logger.warning(f"Groq throttled (attempt {attempt+1}): {str(e)[:120]} — retrying in {wait}s")
                 await asyncio.sleep(wait)
                 continue
+                
             logger.error(f"Groq call failed (non-retryable): {str(e)[:200]}")
             raise
     raise last
