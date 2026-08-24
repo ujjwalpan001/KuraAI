@@ -452,16 +452,36 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     # WhatsApp LID (Local ID) Swap Fix:
     # If the user started a chat outbound to a hidden LID, a session was created for the LID.
     # When the customer replies, Evolution Go reveals their Real Number and moves the LID to SenderAlt.
-    # We must merge them by updating the old LID session to the Real Number!
+    # --- CRITICAL FIX: LID Merging ---
     sender_alt = message_data.get("sender_alt_phone")
     if sender_alt and sender_alt != message_data["customer_phone"]:
         existing_lid = await db.chat_sessions.find_one({"customer_phone": sender_alt, "tenant_id": tenant_id})
         if existing_lid:
             logger.info(f"Merging LID session {sender_alt} into real phone {message_data['customer_phone']}")
-            await db.chat_sessions.update_one(
-                {"_id": existing_lid["_id"]},
-                {"$set": {"customer_phone": message_data["customer_phone"]}}
-            )
+            
+            # Does the real phone ALREADY have a session?
+            existing_real = await db.chat_sessions.find_one({"customer_phone": message_data["customer_phone"], "tenant_id": tenant_id})
+            
+            if existing_real:
+                # Move all outbound messages from the LID session into the REAL session
+                await db.message_audit_log.update_many(
+                    {"session_id": existing_lid["session_id"]},
+                    {"$set": {"session_id": existing_real["session_id"]}}
+                )
+                # If the LID session was marked NEEDS_HUMAN, transfer that status to the real session
+                if existing_lid.get("status") == "NEEDS_HUMAN":
+                    await db.chat_sessions.update_one(
+                        {"_id": existing_real["_id"]},
+                        {"$set": {"status": "NEEDS_HUMAN"}}
+                    )
+                # Delete the ghost LID session
+                await db.chat_sessions.delete_one({"_id": existing_lid["_id"]})
+            else:
+                # No real session exists yet, just rename the LID session
+                await db.chat_sessions.update_one(
+                    {"_id": existing_lid["_id"]},
+                    {"$set": {"customer_phone": message_data["customer_phone"]}}
+                )
 
     # Check if a session already exists before getting/creating one
     existing_session = await db.chat_sessions.find_one({"customer_phone": message_data["customer_phone"], "tenant_id": tenant_id})
