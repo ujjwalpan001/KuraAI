@@ -446,7 +446,7 @@ async def admin_add_knowledge(body: KnowledgeIn, background_tasks: BackgroundTas
     doc["created_at"] = datetime.utcnow()
     await db.knowledge_docs.insert_one(doc)
     await index_upsert([{"id": doc["doc_id"], "document": doc["content"],
-                         "metadata": {"tenant_id": doc["tenant_id"], "type": "knowledge", "title": doc["title"]}}])
+                         "metadata": {"tenant_id": doc["tenant_id"], "type": "knowledge", "doc_type": doc.get("doc_type", "faq"), "title": doc["title"]}}])
     # Extract keywords with LLM in background — 0 latency impact on the save response
     background_tasks.add_task(_extract_keywords_llm, doc["doc_id"], doc["title"], doc["content"])
     return {"ok": True, "doc_id": doc["doc_id"]}

@@ -177,7 +177,7 @@ async def ingest_text_pdf(tenant_id: str, pdf_bytes: bytes, source_name: str, re
                 "source_pdf": source_name, "created_at": datetime.utcnow(),
             })
             rows.append({"id": doc_id, "document": chunk,
-                         "metadata": {"tenant_id": tenant_id, "type": "knowledge", "title": title}})
+                         "metadata": {"tenant_id": tenant_id, "type": "knowledge", "doc_type": "document", "title": title}})
             created += 1
             if created % 15 == 0:
                 await _set_job(job_id, text_chunks=created)

@@ -68,6 +68,7 @@ async def build_chroma_index():
         metadatas.append({
             "tenant_id": doc["tenant_id"],
             "type": "knowledge",
+            "doc_type": doc.get("doc_type", "faq"),
             "title": doc["title"],
         })
 
@@ -141,9 +142,10 @@ async def index_remove(ids: list[str]) -> None:
         print(f"index_remove failed: {e}")
 
 
-def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3) -> list[str]:
+def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3, category: str = "all") -> list[str]:
     """
     Semantic search over KNOWLEDGE docs (FAQs, policies, pricing text), tenant-scoped.
+    Supports optional category filtering via doc_type metadata.
     Returns text chunks for the LLM to answer factual questions.
     Returns [] if the index isn't ready yet (bot still replies from system prompt).
     """
@@ -151,9 +153,16 @@ def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3) -> lis
     if collection is None or collection.count() == 0:
         return []
 
+    # Build where clause (Chroma requires nested $and if > 2 conditions in some versions, but list works)
+    where_clause = [{"tenant_id": tenant_id}, {"type": "knowledge"}]
+    if category and category != "all":
+        where_clause.append({"doc_type": category})
+
+    where = {"$and": where_clause} if len(where_clause) > 1 else where_clause[0]
+
     results = collection.query(
         query_texts=[query],
-        where={"$and": [{"tenant_id": tenant_id}, {"type": "knowledge"}]},
+        where=where,
         n_results=min(n_results, collection.count()),
         include=["documents", "distances"],
     )

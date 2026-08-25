@@ -57,6 +57,11 @@ TOOLS = [
                 "query": {
                     "type": "string",
                     "description": "Search query to find relevant knowledge base articles.",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["all", "faq", "product", "pricing", "policy", "service", "document"],
+                    "description": "Optional category filter to restrict search to a specific document type. Default is 'all'.",
                 }
             },
             "required": ["query"],
