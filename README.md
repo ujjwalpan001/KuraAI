@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **Live Demo Access & Credentials**
-> The backend for this project is deployed on a free cloud tier. Please allow **15-30 seconds** for the server to wake up on your first request.
+> The backend for this project is deployed on a free cloud tier. Please allow **15-30 seconds** for the server to wake up on your first request .
 > - **Demo Email:** `admin@gmail.com`
 > - **Demo Password:** `Admin@9804`
 
