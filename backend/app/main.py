@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -69,8 +69,9 @@ app.include_router(contact_router)
 
 
 @app.get("/health")
+@app.head("/health")
 async def health():
-    return {"status": "ok"}
+    return Response(status_code=200)
 
 
 @app.get("/")
