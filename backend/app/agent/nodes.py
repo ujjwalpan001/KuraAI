@@ -356,8 +356,14 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
         prompt += "\n\n--- MEDIA YOU CAN SEND (via get_media tool) ---\n"
         for url, keywords in seen_urls.items():
             kind = "PDF document" if url.lower().endswith(".pdf") else "image"
-            prompt += f"- {kind}: ask with keyword '{keywords[0]}'\n"
+            # Show humanized labels AND all raw keywords so LLM can match loosely
+            human_labels = [k.replace("_", " ").replace("-", " ") for k in keywords]
+            prompt += f"- {kind}: labels = {human_labels} → call get_media with the most relevant label\n"
         prompt += (
+            "IMPORTANT: When the user asks for any media using ANY synonym, related word, or rough description,"
+            " pick the CLOSEST label from the list above and call get_media with it. "
+            "For example: if labels include 'profile pic' and the user says 'send your photo', 'your pic', or 'image of you', "
+            "call get_media with keyword='profile pic'. Do NOT say you don't have it if a close match exists.\n"
             "This is the COMPLETE list of files you have. You have exactly ONE file per item above.\n"
             "If a customer asks for 'more' images or something not in this list, do NOT re-send the same "
             "file. Instead, honestly say that's the piece you have on hand and offer the full *catalog* "
@@ -494,17 +500,47 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             result = {}
 
             if name == "get_media":
-                keyword = (args.get("keyword") or "").lower()
+                keyword = (args.get("keyword") or "").lower().replace("_", " ").replace("-", " ")
                 logger.info(f"[TOOL] get_media({keyword!r}) -> MongoDB media_library")
-                matched = None
+
+                def _score(key: str, query: str) -> float:
+                    """Return a 0-1 similarity score between a media key and user query."""
+                    # Normalize both: remove underscores, split into word tokens
+                    key_tokens = set(key.lower().replace("_", " ").replace("-", " ").split())
+                    q_tokens   = set(query.lower().replace("_", " ").replace("-", " ").split())
+                    if not key_tokens or not q_tokens:
+                        return 0.0
+                    # Jaccard-style: intersection / union gives word overlap
+                    intersection = key_tokens & q_tokens
+                    union = key_tokens | q_tokens
+                    jaccard = len(intersection) / len(union)
+                    # Bonus: if query is contained in key or vice versa (substring on normalized)
+                    key_str = " ".join(sorted(key_tokens))
+                    q_str   = " ".join(sorted(q_tokens))
+                    substring_bonus = 0.3 if (q_str in key_str or key_str in q_str) else 0.0
+                    # Bonus: any individual query token appears inside any key token (catches 'pic' in 'profile_pic')
+                    partial_bonus = 0.0
+                    for qt in q_tokens:
+                        for kt in key_tokens:
+                            if qt in kt or kt in qt:
+                                partial_bonus = max(partial_bonus, 0.2)
+                    return min(1.0, jaccard + substring_bonus + partial_bonus)
+
+                best_key, best_url, best_score = None, None, 0.0
                 for key, url in (tenant.get("media_library") or {}).items():
-                    if keyword in key.lower() or key.lower() in keyword:
-                        media_url, matched = url, key
-                        media_type = await _media_kind(url)
-                        if media_type == "DOCUMENT":
-                            media_filename = f"{key.title().replace(' ', '_')}.pdf"
-                        logger.info(f"[MEDIA] matched {key!r} -> {media_type}: {url}")
-                        break
+                    s = _score(key, keyword)
+                    if s > best_score:
+                        best_key, best_url, best_score = key, url, s
+
+                matched = None
+                if best_score >= 0.15 and best_key:   # low threshold — if ANY overlap, use it
+                    media_url, matched = best_url, best_key
+                    media_type = await _media_kind(best_url)
+                    if media_type == "DOCUMENT":
+                        media_filename = f"{best_key.title().replace(' ', '_')}.pdf"
+                    logger.info(f"[MEDIA] fuzzy matched {best_key!r} (score={best_score:.2f}) -> {media_type}: {best_url}")
+                else:
+                    logger.info(f"[MEDIA] no match for {keyword!r} (best={best_key!r}, score={best_score:.2f})")
                 result = ({"status": "sent", "item": matched, "type": media_type}
                           if matched else {"status": "not_found", "note": "No such file; offer the catalog instead."})
 
