@@ -637,11 +637,24 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             except Exception as e:
                 logger.warning(f"Groq follow-up failed: {e}")
         
-        elif media_url and matched:
-            # Zero-token template: generate a context-aware reply from the media key name
-            final_reply = _media_reply_template(matched, media_type or "IMAGE")
-            logger.info(f"[CALL2] Skipped — using template for {matched!r} (0 tokens saved)")
+        pass  # template applied post-dedup below
 
+
+    # DEDUP: must happen BEFORE template so template is never sent without the file.
+    if media_url:
+        recent_media = {
+            m.get("media_url")
+            for m in (state.get("chat_history") or [])
+            if m.get("direction") == "OUTBOUND" and m.get("media_url")
+        }
+        if media_url in recent_media:
+            logger.info(f"[DEDUP] {media_url} already sent recently -> clearing media")
+            media_url = media_type = media_filename = matched = None
+
+    # Apply zero-token template ONLY when media_url is confirmed valid after dedup
+    if media_url and matched and not final_reply:
+        final_reply = _media_reply_template(matched, media_type or "IMAGE")
+        logger.info(f"[CALL2] Template used for {matched!r} (0 tokens)")
 
     # Fallbacks
     if not final_reply:
@@ -652,11 +665,11 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
         else:
             final_reply = "I'm here to help! Could you tell me a bit more about what you're looking for?"
 
-    # HONESTY GUARD: never claim to have sent/attached a file when none is attached
-    # (stops "I've sent you the s5 image" when search found nothing).
+    # HONESTY GUARD: never claim to have sent/attached a file when none is attached.
     if not media_url and re.search(
         r"(i'?ve sent|i have sent|just sent|sent you|i'?ve attached|attached is|"
-        r"here'?s the (image|photo|picture|pdf|catalog|document|diagram|invoice|file))",
+        r"here'?s the (image|photo|picture|pdf|catalog|document|diagram|invoice|file)|"
+        r"here is (our|your))",
         final_reply or "", re.I,
     ):
         final_reply = (
@@ -665,18 +678,6 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
         )
 
     state["llm_reply"] = final_reply
-    # DEDUP: never re-send a file already sent recently in this conversation
-    # (stops "Hello" re-sending the catalog and "any more?" re-sending the same sofa).
-    if media_url:
-        recent_media = {
-            m.get("media_url")
-            for m in (state.get("chat_history") or [])
-            if m.get("direction") == "OUTBOUND" and m.get("media_url")
-        }
-        if media_url in recent_media:
-            logger.info(f"[DEDUP] {media_url} already sent recently -> text only")
-            media_url = media_type = media_filename = None
-
     state["media_to_send"] = media_url
     state["media_type"] = media_type
     state["media_filename"] = media_filename
