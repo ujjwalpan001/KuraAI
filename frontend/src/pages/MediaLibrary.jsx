@@ -2,32 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Folder, FileText, Image, Search, Upload, Trash2, BookOpen, Plus, Tag, Brain, X, ChevronDown } from "lucide-react";
 import { api, displayUrl } from "../api/client";
 
-// ---------------------------------------------------------------------------
-// Zero-LLM keyword extraction — pure frequency / TF approach
-// ---------------------------------------------------------------------------
-const STOPWORDS = new Set([
-  "the","a","an","is","are","was","were","be","been","being","have","has","had",
-  "do","does","did","will","would","could","should","may","might","and","but","or",
-  "nor","so","yet","both","either","neither","not","only","very","just","to","in",
-  "on","at","by","for","with","about","as","until","while","of","if","no","you",
-  "we","i","they","it","he","she","our","your","their","this","that","these","those",
-  "what","which","who","how","all","any","each","every","some","such","from","up",
-  "out","then","than","too","its","my","me","him","her","us","them","can","also",
-  "into","over","after","before","when","where","why","more","most","other",
-]);
+// No in-browser keyword extraction — LLM handles it at save time (once, ~280 tokens)
 
-function extractKeywords(title, content, topN = 6) {
-  const text = `${title} ${title} ${content}`.toLowerCase(); // title weighted 2x
-  const words = text.match(/\b[a-z]{3,}\b/g) || [];
-  const freq = {};
-  for (const w of words) {
-    if (!STOPWORDS.has(w)) freq[w] = (freq[w] || 0) + 1;
-  }
-  return Object.entries(freq)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, topN)
-    .map(([w]) => w);
-}
 
 // ---------------------------------------------------------------------------
 // DocType config
@@ -48,7 +24,8 @@ function typeColor(t) {
 // KnowledgeCard — inline editable entry
 // ---------------------------------------------------------------------------
 function KnowledgeCard({ doc, onDelete }) {
-  const kws = doc.keywords || extractKeywords(doc.title, doc.content);
+  const kws = doc.keywords || [];
+  const pending = kws.length === 0;
   return (
     <div className="bg-surface border border-hair rounded-xl p-5 group hover:border-brand/30 transition-all">
       <div className="flex items-start justify-between gap-4 mb-3">
@@ -72,11 +49,17 @@ function KnowledgeCard({ doc, onDelete }) {
       </div>
       <p className="text-[12.5px] text-muted leading-relaxed line-clamp-3 mb-3">{doc.content}</p>
       <div className="flex flex-wrap gap-1.5">
-        {kws.map(k => (
-          <span key={k} className="flex items-center gap-1 px-2 py-0.5 bg-brand/5 border border-brand/10 text-brand rounded-full text-[11px] font-mono">
-            <Tag size={9} /> {k}
+        {pending ? (
+          <span className="text-[11px] text-muted italic flex items-center gap-1 animate-pulse">
+            <Tag size={9} /> AI extracting keywords…
           </span>
-        ))}
+        ) : (
+          kws.map(k => (
+            <span key={k} className="flex items-center gap-1 px-2 py-0.5 bg-brand/5 border border-brand/10 text-brand rounded-full text-[11px] font-mono">
+              <Tag size={9} /> {k}
+            </span>
+          ))
+        )}
       </div>
     </div>
   );
@@ -90,11 +73,6 @@ function NewEntryForm({ tenantId, onSaved, onCancel }) {
   const [content, setContent] = useState("");
   const [docType, setDocType] = useState("faq");
   const [saving, setSaving]   = useState(false);
-  const [previewKws, setPreviewKws] = useState([]);
-
-  useEffect(() => {
-    setPreviewKws(extractKeywords(title, content));
-  }, [title, content]);
 
   const handleSave = async () => {
     if (!title.trim() || !content.trim()) {
@@ -120,7 +98,6 @@ function NewEntryForm({ tenantId, onSaved, onCancel }) {
   return (
     <div className="bg-canvas border border-brand/30 rounded-xl p-5 shadow-[0_0_20px_rgba(99,102,241,0.08)]">
       <div className="flex items-center gap-3 mb-4">
-        {/* Doc type selector */}
         <div className="relative">
           <select
             value={docType}
@@ -147,17 +124,10 @@ function NewEntryForm({ tenantId, onSaved, onCancel }) {
         rows={6}
         className="w-full px-3 py-2.5 bg-surface border border-hair rounded-lg text-[13px] text-ink leading-relaxed focus:outline-none focus:border-brand resize-y mb-3"
       />
-      {/* Live keyword preview */}
-      {previewKws.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap mb-4">
-          <span className="text-[11px] text-muted font-medium">Auto-keywords:</span>
-          {previewKws.map(k => (
-            <span key={k} className="flex items-center gap-1 px-2 py-0.5 bg-brand/5 border border-brand/10 text-brand rounded-full text-[11px] font-mono">
-              <Tag size={9} /> {k}
-            </span>
-          ))}
-        </div>
-      )}
+      <p className="text-[11px] text-muted mb-4 flex items-center gap-1.5">
+        <Brain size={10} className="text-brand" />
+        Keywords will be automatically extracted by AI after saving — no extra wait for you.
+      </p>
       <div className="flex items-center gap-2 justify-end">
         <button onClick={onCancel} className="px-3 py-1.5 text-muted hover:text-ink text-[13px] transition-colors">
           Cancel
