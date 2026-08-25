@@ -528,76 +528,46 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             result = {}
 
             if name == "get_media":
-                keyword = (args.get("keyword") or "").lower().replace("_", " ").replace("-", " ")
+                raw_kw = (args.get("keyword") or "")
+                # Normalize: strip underscores, dashes, extra spaces, lowercase
+                norm = lambda s: " ".join(s.lower().replace("_", " ").replace("-", " ").split())
+                keyword = norm(raw_kw)
                 logger.info(f"[TOOL] get_media({keyword!r}) -> MongoDB media_library")
 
-                def _score(key: str, query: str) -> float:
-                    """Return a 0-1 similarity score between a media key and user query."""
-                    key_tokens = set(key.lower().replace("_", " ").replace("-", " ").split())
-                    q_tokens   = set(query.lower().replace("_", " ").replace("-", " ").split())
-                    if not key_tokens or not q_tokens:
-                        return 0.0
-                    intersection = key_tokens & q_tokens
-                    union = key_tokens | q_tokens
-                    jaccard = len(intersection) / len(union)
-                    key_str = " ".join(sorted(key_tokens))
-                    q_str   = " ".join(sorted(q_tokens))
-                    substring_bonus = 0.3 if (q_str in key_str or key_str in q_str) else 0.0
-                    partial_bonus = 0.0
-                    for qt in q_tokens:
-                        for kt in key_tokens:
-                            if qt in kt or kt in qt:
-                                partial_bonus = max(partial_bonus, 0.2)
-                    return min(1.0, jaccard + substring_bonus + partial_bonus)
+                # Build a normalized lookup map: normalized_key → (original_key, url)
+                norm_map: dict[str, list[tuple[str, str]]] = {}
+                for k, u in (tenant.get("media_library") or {}).items():
+                    nk = norm(k)
+                    norm_map.setdefault(nk, []).append((k, u))
 
-                # Score ALL keys and collect candidates above threshold
-                scored = []
-                for key, url in (tenant.get("media_library") or {}).items():
-                    s = _score(key, keyword)
-                    if s >= 0.15:
-                        scored.append((s, key, url))
-                scored.sort(key=lambda x: -x[0])  # best first
+                # Find all keys whose normalized form matches the query
+                matches = norm_map.get(keyword, [])
 
                 matched = None
-                if len(scored) == 0:
+                if len(matches) == 0:
                     logger.info(f"[MEDIA] no match for {keyword!r}")
                     result = {"status": "not_found", "note": "No such file; offer the catalog instead."}
 
-                elif len(scored) == 1:
-                    # Exactly one match — send it directly
-                    _, best_key, best_url = scored[0]
+                elif len(matches) == 1:
+                    best_key, best_url = matches[0]
                     media_url, matched = best_url, best_key
                     media_type = await _media_kind(best_url)
                     if media_type == "DOCUMENT":
                         media_filename = f"{best_key.title().replace(' ', '_')}.pdf"
-                    logger.info(f"[MEDIA] single match {best_key!r} -> {media_type}: {best_url}")
+                    logger.info(f"[MEDIA] matched {best_key!r} -> {media_type}: {best_url}")
                     result = {"status": "sent", "item": matched, "type": media_type}
 
                 else:
-                    # Multiple candidates — check if there is a clearly dominant one
-                    top_score = scored[0][0]
-                    second_score = scored[1][0]
-                    # If top score is significantly better (30% gap), auto-send it
-                    if top_score - second_score >= 0.3:
-                        _, best_key, best_url = scored[0]
-                        media_url, matched = best_url, best_key
-                        media_type = await _media_kind(best_url)
-                        if media_type == "DOCUMENT":
-                            media_filename = f"{best_key.title().replace(' ', '_')}.pdf"
-                        logger.info(f"[MEDIA] dominant match {best_key!r} (gap={top_score-second_score:.2f}) -> {media_type}")
-                        result = {"status": "sent", "item": matched, "type": media_type}
-                    else:
-                        # Ambiguous — tell LLM to ask user to pick
-                        candidates = [k.replace("_", " ").replace("-", " ") for _, k, _ in scored[:5]]
-                        logger.info(f"[MEDIA] ambiguous match for {keyword!r}, candidates={candidates}")
-                        result = {
-                            "status": "ambiguous",
-                            "candidates": candidates,
-                            "note": (
-                                f"Multiple files match '{keyword}'. "
-                                "Ask the user to pick one by listing the options as a numbered or bulleted list."
-                            )
-                        }
+                    # Multiple keys share the same normalized name (e.g. 'food menu' and 'food_menu')
+                    # → send the first one, they point to the same intent
+                    best_key, best_url = matches[0]
+                    media_url, matched = best_url, best_key
+                    media_type = await _media_kind(best_url)
+                    if media_type == "DOCUMENT":
+                        media_filename = f"{best_key.title().replace(' ', '_')}.pdf"
+                    logger.info(f"[MEDIA] matched (dedup) {best_key!r} -> {media_type}")
+                    result = {"status": "sent", "item": matched, "type": media_type}
+
 
             elif name == "search_catalog":
                 desc = args.get("description") or ""
@@ -650,10 +620,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             
             if name == "get_media":
                 status = (tool_result.get("status") or "")
-                if status == "ambiguous":
-                    ambiguous_candidates = tool_result.get("candidates", [])
-                    needs_llm_call2 = True  # LLM must format the options list
-                elif status == "not_found":
+                if status == "not_found":
                     needs_llm_call2 = True  # LLM handles "I don't have that"
                 # status == "sent" → template handles it ✅
             elif name in ("search_catalog", "search_knowledge", "escalate_to_human"):
