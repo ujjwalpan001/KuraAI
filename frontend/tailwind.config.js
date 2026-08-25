@@ -9,17 +9,17 @@ export default {
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       colors: {
-        canvas: "#09090B",   // Ultra-dark zinc
-        surface: "#18181B",  // Card background
+        canvas: "#050505",   // Pure black background requested
+        surface: "#111111",  // Card background
         ink: "#FAFAFA",      // Bright white text
         muted: "#A1A1AA",    // Zinc-400
         faint: "#52525B",    // Zinc-600
         hair: "#27272A",     // Zinc-800 borders
-        rail: "#050505",     // Pure black sidebar
+        rail: "#000000",     // Pure black sidebar
         brand: {
-          DEFAULT: "#6366F1",  // Neon Indigo
-          deep: "#818CF8",
-          soft: "rgba(99, 102, 241, 0.1)",
+          DEFAULT: "#A89BF2",  // User requested purple
+          deep: "#8a7be0",
+          soft: "rgba(168, 155, 242, 0.1)",
         },
         alert: { DEFAULT: "#EF4444", soft: "rgba(239, 68, 68, 0.1)" },
         chat: {

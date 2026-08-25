@@ -4,7 +4,7 @@ import { Bot, Eye, EyeOff, Zap, ShieldCheck, LineChart } from "lucide-react";
 import { GoogleLogin } from '@react-oauth/google';
 
 /* ────────────────────────────────────────────────────────────
-   WhatsAgent — Re-designed Dark Theme with Carousel
+   Kura — Re-designed Dark Theme with Carousel
    ──────────────────────────────────────────────────────────── */
 
 const FONT_IMPORT = `
@@ -17,7 +17,7 @@ const CAROUSEL_SLIDES = [
   "https://images.unsplash.com/photo-1604871000636-074fa5117945?q=80&w=2787&auto=format&fit=crop"
 ];
 
-export default function Login({ onSuccess }) {
+export default function Login({ onSuccess, onBack }) {
   const [mode, setMode] = useState("login");
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -50,13 +50,14 @@ export default function Login({ onSuccess }) {
           <div className="absolute inset-0 z-10 flex flex-col justify-between p-8">
             {/* Top Bar */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2 text-white font-bold text-lg tracking-wide">
-                <Bot size={24} className="text-white" />
-                WhatsAgent
+              <div className="flex items-center">
+                <img src="/kura.png" alt="Logo" className="h-12 w-auto object-contain" />
               </div>
-              <button className="flex items-center gap-1.5 text-[11px] font-medium bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full text-white transition-colors cursor-pointer">
-                Back to website <span aria-hidden="true">&rarr;</span>
-              </button>
+              {onBack && (
+                <button onClick={onBack} className="flex items-center gap-1.5 text-[11px] font-medium bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full text-white transition-colors cursor-pointer">
+                  Back to website <span aria-hidden="true">&rarr;</span>
+                </button>
+              )}
             </div>
 
             {/* Middle/Bottom Text & Features */}
@@ -107,8 +108,8 @@ export default function Login({ onSuccess }) {
         {/* ── Right Form Panel ── */}
         <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-10 relative overflow-y-auto">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-10 text-white font-bold text-xl tracking-wide">
-             <Bot size={28} /> WhatsAgent
+          <div className="lg:hidden flex items-center mb-10">
+             <img src="/kura.png" alt="Logo" className="h-12 w-auto object-contain" />
           </div>
 
           <div className="w-full max-w-[400px] mx-auto">

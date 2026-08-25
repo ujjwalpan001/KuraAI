@@ -11,7 +11,9 @@ import Broadcasts from "./pages/Broadcasts";
 import MediaLibrary from "./pages/MediaLibrary";
 import TenantManagement from "./pages/TenantManagement";
 import WhatsAppConnect from "./pages/WhatsAppConnect";
-// Force logout on initial load for demo purposes so the Login page always comes first
+import Landing from "./pages/Landing";
+
+// Force logout on initial load for demo purposes so the Landing/Login page always comes first
 if (!sessionStorage.getItem("demo_init")) {
   logout();
   sessionStorage.setItem("demo_init", "true");
@@ -19,7 +21,15 @@ if (!sessionStorage.getItem("demo_init")) {
 
 export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
-  if (!authed) return <Login onSuccess={() => setAuthed(true)} />;
+  const [showLogin, setShowLogin] = useState(false);
+
+  if (!authed) {
+    if (showLogin) {
+      return <Login onSuccess={() => setAuthed(true)} onBack={() => setShowLogin(false)} />;
+    }
+    return <Landing onLoginClick={() => setShowLogin(true)} />;
+  }
+
   return <Console />;
 }
 
@@ -59,7 +69,7 @@ function Console() {
         return (
            <div className="p-8 max-w-4xl mx-auto">
               <h1 className="text-2xl font-display font-semibold mb-2 text-ink">Settings</h1>
-              <p className="text-[14px] text-muted mb-8">Global configuration for the WhatsAgent platform.</p>
+              <p className="text-[14px] text-muted mb-8">Global configuration for the Kura platform.</p>
                             <div className="space-y-6">
                 <div className="bg-surface border border-hair rounded-xl p-6">
                   <h3 className="text-[15px] font-display font-semibold mb-4">Global API Keys</h3>
