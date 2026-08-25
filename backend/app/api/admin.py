@@ -22,42 +22,6 @@ router = APIRouter(prefix="/api/admin")
 logger = logging.getLogger(__name__)
 
 
-async def _extract_keywords_llm(doc_id: str, title: str, content: str) -> None:
-    """
-    Runs ONCE at save time to extract high-quality keywords using LLM.
-    Costs ~280 tokens per entry. Stored in MongoDB — never called at query time.
-    """
-    try:
-        import asyncio
-        from groq import Groq
-        groq = Groq(api_key=settings.groq_api_key)
-        snippet = content[:600]  # cap input to save tokens
-        prompt = (
-            f"Extract 5-8 short, specific keywords from this business knowledge entry. "
-            f"Return ONLY a comma-separated list of keywords, nothing else.\n\n"
-            f"Title: {title}\nContent: {snippet}"
-        )
-        resp = await asyncio.to_thread(
-            groq.chat.completions.create,
-            model="llama3-8b-8192",   # cheapest model, perfect for this simple task
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=60,             # keywords are short — 60 tokens is plenty
-            temperature=0.2,
-        )
-        raw = resp.choices[0].message.content or ""
-        keywords = [k.strip().lower() for k in raw.split(",") if k.strip()][:8]
-        if keywords:
-            db = get_db()
-            await db.knowledge_docs.update_one(
-                {"doc_id": doc_id},
-                {"$set": {"keywords": keywords}}
-            )
-            logger.info(f"[KNOWLEDGE] Keywords extracted for {doc_id}: {keywords}")
-    except Exception as e:
-        logger.warning(f"[KNOWLEDGE] Keyword extraction failed for {doc_id}: {e}")
-
-
-
 MAX_UPLOAD_MB = 18  # keep memory in check on a small instance
 
 
@@ -437,18 +401,15 @@ async def admin_ingest_knowledge_pdf(tenant_id: str, file: UploadFile = File(...
 
 
 @router.post("/knowledge")
-async def admin_add_knowledge(body: KnowledgeIn, background_tasks: BackgroundTasks):
+async def admin_add_knowledge(body: KnowledgeIn):
     db = get_db()
     doc = body.model_dump()
     doc["doc_id"] = str(uuid4())
     doc["source"] = "admin"
-    doc["keywords"] = []   # will be filled by background task
     doc["created_at"] = datetime.utcnow()
     await db.knowledge_docs.insert_one(doc)
     await index_upsert([{"id": doc["doc_id"], "document": doc["content"],
                          "metadata": {"tenant_id": doc["tenant_id"], "type": "knowledge", "doc_type": doc.get("doc_type", "faq"), "title": doc["title"]}}])
-    # Extract keywords with LLM in background — 0 latency impact on the save response
-    background_tasks.add_task(_extract_keywords_llm, doc["doc_id"], doc["title"], doc["content"])
     return {"ok": True, "doc_id": doc["doc_id"]}
 
 

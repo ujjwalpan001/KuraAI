@@ -24,8 +24,6 @@ function typeColor(t) {
 // KnowledgeCard — inline editable entry
 // ---------------------------------------------------------------------------
 function KnowledgeCard({ doc, onDelete }) {
-  const kws = doc.keywords || [];
-  const pending = kws.length === 0;
   return (
     <div className="bg-surface border border-hair rounded-xl p-5 group hover:border-brand/30 transition-all">
       <div className="flex items-start justify-between gap-4 mb-3">
@@ -47,20 +45,7 @@ function KnowledgeCard({ doc, onDelete }) {
           <Trash2 size={14} />
         </button>
       </div>
-      <p className="text-[12.5px] text-muted leading-relaxed line-clamp-3 mb-3">{doc.content}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {pending ? (
-          <span className="text-[11px] text-muted italic flex items-center gap-1 animate-pulse">
-            <Tag size={9} /> AI extracting keywords…
-          </span>
-        ) : (
-          kws.map(k => (
-            <span key={k} className="flex items-center gap-1 px-2 py-0.5 bg-brand/5 border border-brand/10 text-brand rounded-full text-[11px] font-mono">
-              <Tag size={9} /> {k}
-            </span>
-          ))
-        )}
-      </div>
+      <p className="text-[12.5px] text-muted leading-relaxed line-clamp-3 mb-1">{doc.content}</p>
     </div>
   );
 }
@@ -122,12 +107,8 @@ function NewEntryForm({ tenantId, onSaved, onCancel }) {
         onChange={e => setContent(e.target.value)}
         placeholder="Write the full knowledge content here. The more detail, the better the AI will answer. You can write FAQs, policies, service descriptions, pricing details, team info, etc."
         rows={6}
-        className="w-full px-3 py-2.5 bg-surface border border-hair rounded-lg text-[13px] text-ink leading-relaxed focus:outline-none focus:border-brand resize-y mb-3"
+        className="w-full px-3 py-2.5 bg-surface border border-hair rounded-lg text-[13px] text-ink leading-relaxed focus:outline-none focus:border-brand resize-y mb-4"
       />
-      <p className="text-[11px] text-muted mb-4 flex items-center gap-1.5">
-        <Brain size={10} className="text-brand" />
-        Keywords will be automatically extracted by AI after saving — no extra wait for you.
-      </p>
       <div className="flex items-center gap-2 justify-end">
         <button onClick={onCancel} className="px-3 py-1.5 text-muted hover:text-ink text-[13px] transition-colors">
           Cancel
