@@ -75,5 +75,6 @@ async def health():
 
 
 @app.get("/")
+@app.head("/")
 async def root():
-    return {"message": "Multi-Tenant WhatsApp Agent API", "docs": "/docs"}
+    return Response(status_code=200)
