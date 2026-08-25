@@ -368,6 +368,10 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
             "If a customer asks for 'more' images or something not in this list, do NOT re-send the same "
             "file. Instead, honestly say that's the piece you have on hand and offer the full *catalog* "
             "to see the complete range. Only call get_media when the customer actually wants to receive a file.\n"
+            "DISAMBIGUATION RULE: If get_media returns status='ambiguous', do NOT send any file. "
+            "Instead, list the candidate options as a friendly numbered list and ask the user to pick. "
+            "Example: 'I have a few options — which one do you want?\n1️⃣ Food Menu\n2️⃣ Drinks Menu'. "
+            "Wait for their reply, then call get_media again with the exact choice.\n"
             "--- END MEDIA LIST ---\n"
         )
 
@@ -505,20 +509,16 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
 
                 def _score(key: str, query: str) -> float:
                     """Return a 0-1 similarity score between a media key and user query."""
-                    # Normalize both: remove underscores, split into word tokens
                     key_tokens = set(key.lower().replace("_", " ").replace("-", " ").split())
                     q_tokens   = set(query.lower().replace("_", " ").replace("-", " ").split())
                     if not key_tokens or not q_tokens:
                         return 0.0
-                    # Jaccard-style: intersection / union gives word overlap
                     intersection = key_tokens & q_tokens
                     union = key_tokens | q_tokens
                     jaccard = len(intersection) / len(union)
-                    # Bonus: if query is contained in key or vice versa (substring on normalized)
                     key_str = " ".join(sorted(key_tokens))
                     q_str   = " ".join(sorted(q_tokens))
                     substring_bonus = 0.3 if (q_str in key_str or key_str in q_str) else 0.0
-                    # Bonus: any individual query token appears inside any key token (catches 'pic' in 'profile_pic')
                     partial_bonus = 0.0
                     for qt in q_tokens:
                         for kt in key_tokens:
@@ -526,23 +526,54 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                                 partial_bonus = max(partial_bonus, 0.2)
                     return min(1.0, jaccard + substring_bonus + partial_bonus)
 
-                best_key, best_url, best_score = None, None, 0.0
+                # Score ALL keys and collect candidates above threshold
+                scored = []
                 for key, url in (tenant.get("media_library") or {}).items():
                     s = _score(key, keyword)
-                    if s > best_score:
-                        best_key, best_url, best_score = key, url, s
+                    if s >= 0.15:
+                        scored.append((s, key, url))
+                scored.sort(key=lambda x: -x[0])  # best first
 
                 matched = None
-                if best_score >= 0.15 and best_key:   # low threshold — if ANY overlap, use it
+                if len(scored) == 0:
+                    logger.info(f"[MEDIA] no match for {keyword!r}")
+                    result = {"status": "not_found", "note": "No such file; offer the catalog instead."}
+
+                elif len(scored) == 1:
+                    # Exactly one match — send it directly
+                    _, best_key, best_url = scored[0]
                     media_url, matched = best_url, best_key
                     media_type = await _media_kind(best_url)
                     if media_type == "DOCUMENT":
                         media_filename = f"{best_key.title().replace(' ', '_')}.pdf"
-                    logger.info(f"[MEDIA] fuzzy matched {best_key!r} (score={best_score:.2f}) -> {media_type}: {best_url}")
+                    logger.info(f"[MEDIA] single match {best_key!r} -> {media_type}: {best_url}")
+                    result = {"status": "sent", "item": matched, "type": media_type}
+
                 else:
-                    logger.info(f"[MEDIA] no match for {keyword!r} (best={best_key!r}, score={best_score:.2f})")
-                result = ({"status": "sent", "item": matched, "type": media_type}
-                          if matched else {"status": "not_found", "note": "No such file; offer the catalog instead."})
+                    # Multiple candidates — check if there is a clearly dominant one
+                    top_score = scored[0][0]
+                    second_score = scored[1][0]
+                    # If top score is significantly better (30% gap), auto-send it
+                    if top_score - second_score >= 0.3:
+                        _, best_key, best_url = scored[0]
+                        media_url, matched = best_url, best_key
+                        media_type = await _media_kind(best_url)
+                        if media_type == "DOCUMENT":
+                            media_filename = f"{best_key.title().replace(' ', '_')}.pdf"
+                        logger.info(f"[MEDIA] dominant match {best_key!r} (gap={top_score-second_score:.2f}) -> {media_type}")
+                        result = {"status": "sent", "item": matched, "type": media_type}
+                    else:
+                        # Ambiguous — tell LLM to ask user to pick
+                        candidates = [k.replace("_", " ").replace("-", " ") for _, k, _ in scored[:5]]
+                        logger.info(f"[MEDIA] ambiguous match for {keyword!r}, candidates={candidates}")
+                        result = {
+                            "status": "ambiguous",
+                            "candidates": candidates,
+                            "note": (
+                                f"Multiple files match '{keyword}'. "
+                                "Ask the user to pick one by listing the options as a numbered or bulleted list."
+                            )
+                        }
 
             elif name == "search_catalog":
                 desc = args.get("description") or ""
