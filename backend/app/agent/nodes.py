@@ -397,12 +397,26 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
 
 def _media_reply_template(key: str, media_type: str) -> str:
     """
-    Single zero-token template with a dynamic label in the middle.
-    Humanizes the media key: 'food_menu' → 'Food Menu', 'profile_pic' → 'Profile Pic'
+    Single zero-token template with a dynamic label.
+    Uses 'our' for business content (catalog, menu, services)
+    and 'your' for customer-specific content (bill, invoice, ticket).
     """
     label = key.replace("_", " ").replace("-", " ").title()
     icon = "📄" if media_type == "DOCUMENT" else "📎"
-    return f"Here is your {label} {icon} — let me know if you have any questions or need anything else! 😊"
+
+    # Keywords that belong to the CUSTOMER personally → "your"
+    personal_keywords = (
+        "bill", "invoice", "receipt", "ticket", "booking", "order",
+        "statement", "report", "estimate", "quote", "contract", "agreement",
+        "subscription", "plan", "payment", "refund", "warranty", "certificate",
+        "card", "id", "pass", "record"
+    )
+    k = key.lower().replace("_", " ").replace("-", " ")
+    if any(w in k for w in personal_keywords):
+        return f"Here is your {label} {icon} — let me know if you have any questions! 😊"
+
+    # Everything else is business content → "our"
+    return f"Here is our {label} {icon} — let me know if you have any questions or need anything else! 😊"
 
 
 async def _media_kind(url: str) -> str:
