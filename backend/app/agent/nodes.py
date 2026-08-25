@@ -397,53 +397,12 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
 
 def _media_reply_template(key: str, media_type: str) -> str:
     """
-    Generate a context-aware, friendly caption for a media file WITHOUT using the LLM.
-    Saves ~400 tokens per media send. Uses keyword category matching on the media key.
+    Single zero-token template with a dynamic label in the middle.
+    Humanizes the media key: 'food_menu' → 'Food Menu', 'profile_pic' → 'Profile Pic'
     """
-    k = key.lower().replace("_", " ").replace("-", " ")
-
-    # --- FOOD & DRINK ---
-    if any(w in k for w in ("drink", "beverage", "cocktail", "juice", "coffee", "tea", "bar")):
-        return "Here's our drinks menu 🍹 — take a look and let me know what you'd like to order!"
-    if any(w in k for w in ("food", "meal", "dish", "eat", "lunch", "dinner", "breakfast", "snack", "starter", "main", "dessert")):
-        return "Here's our food menu 🍽️ — let me know what catches your eye and I'll sort it out for you!"
-    if any(w in k for w in ("menu", "carte")):
-        return "Here's the menu 📋 — have a look and tell me what you'd like!"
-
-    # --- SERVICES & CONSULTANCY ---
-    if any(w in k for w in ("service", "consult", "solution", "offering", "plan", "package", "tier", "subscription")):
-        return "Here are the services we offer 💼 — feel free to ask about any of them and I'll give you all the details!"
-    if any(w in k for w in ("treatment", "therapy", "spa", "wellness", "massage")):
-        return "Here are our treatments & wellness services 🌿 — let me know which one interests you!"
-
-    # --- CATALOG & PRODUCTS ---
-    if any(w in k for w in ("catalog", "catalogue", "brochure", "collection", "portfolio", "lookbook")):
-        return "Here's our full catalog 📖 — browse through and let me know what you like. I'm happy to share more details on anything!"
-    if any(w in k for w in ("product", "item", "range", "inventory")):
-        return "Here's a look at our products 🛍️ — let me know which one interests you!"
-
-    # --- PRICING ---
-    if any(w in k for w in ("price", "pricing", "rate", "cost", "fee", "tariff", "quote", "estimate")):
-        return "Here's our pricing list 💰 — let me know if you have any questions or need a custom quote!"
-
-    # --- PROFILE / ABOUT ---
-    if any(w in k for w in ("profile", "photo", "pic", "image", "photo", "selfie", "headshot", "portrait", "team", "staff", "about us", "about")):
-        return "Here you go! 😊 Feel free to ask if you'd like to know more about us."
-
-    # --- LOCATION & MAP ---
-    if any(w in k for w in ("location", "map", "address", "direction", "branch", "outlet", "store", "shop", "showroom")):
-        return "Here's how to find us 📍 — let me know if you need more directions or have any questions!"
-
-    # --- DOCUMENTS (invoice, receipt, report, etc.) ---
-    if media_type == "DOCUMENT":
-        if any(w in k for w in ("invoice", "receipt", "bill", "payment")):
-            return "Here's your invoice 🧾 — let me know if anything needs clarification!"
-        if any(w in k for w in ("report", "analysis", "summary")):
-            return "Here's the report 📊 — take a look and feel free to ask questions!"
-        return "Here's the document you requested 📄 — let me know if you need anything else!"
-
-    # --- DEFAULT IMAGE ---
-    return "Here it is! 😊 Let me know if you have any questions or would like to see more."
+    label = key.replace("_", " ").replace("-", " ").title()
+    icon = "📄" if media_type == "DOCUMENT" else "📎"
+    return f"Here is your {label} {icon} — let me know if you have any questions or need anything else! 😊"
 
 
 async def _media_kind(url: str) -> str:
