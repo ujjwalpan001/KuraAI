@@ -28,6 +28,8 @@ Evolution API sends webhooks in this format for inbound messages:
 import json
 import logging
 import re
+import time
+from collections import defaultdict
 from datetime import datetime
 from uuid import uuid4
 
@@ -44,6 +46,12 @@ from app.whatsapp.client import send_text_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Enterprise In-Memory Rate Limiter (Sliding Window)
+_rate_limit_cache: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60  # 1 minute
+RATE_LIMIT_MAX = 10     # max messages per minute per phone number
+
 
 
 def _extract_phone(remote_jid: str) -> str:
@@ -346,6 +354,26 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     instance_name = message_data["instance_name"]
     from_me = message_data.get("from_me", False)
     customer_phone = message_data["customer_phone"]
+
+    # -----------------------------------------------------------------------
+    # ENTERPRISE RATE LIMITING (Fast sliding window)
+    # -----------------------------------------------------------------------
+    if not from_me:
+        now = time.time()
+        # Clean up timestamps outside the window for this customer
+        _rate_limit_cache[customer_phone] = [t for t in _rate_limit_cache[customer_phone] if now - t < RATE_LIMIT_WINDOW]
+        
+        # Check if they hit the limit
+        if len(_rate_limit_cache[customer_phone]) >= RATE_LIMIT_MAX:
+            logger.warning(f"[RATE LIMIT] {customer_phone} exceeded limit (>{RATE_LIMIT_MAX} msgs/min) — dropping spam")
+            return Response(status_code=200)
+            
+        # Add current message timestamp
+        _rate_limit_cache[customer_phone].append(now)
+        
+        # Memory leak protection: if dictionary grows past 20,000 active phones, wipe it
+        if len(_rate_limit_cache) > 20000:
+            _rate_limit_cache.clear()
 
     # -----------------------------------------------------------------------
     # RESOLVE TENANT — simple 1:1: instance → tenant
