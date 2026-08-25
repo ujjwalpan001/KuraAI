@@ -395,6 +395,57 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
     return prompt
 
 
+def _media_reply_template(key: str, media_type: str) -> str:
+    """
+    Generate a context-aware, friendly caption for a media file WITHOUT using the LLM.
+    Saves ~400 tokens per media send. Uses keyword category matching on the media key.
+    """
+    k = key.lower().replace("_", " ").replace("-", " ")
+
+    # --- FOOD & DRINK ---
+    if any(w in k for w in ("drink", "beverage", "cocktail", "juice", "coffee", "tea", "bar")):
+        return "Here's our drinks menu 🍹 — take a look and let me know what you'd like to order!"
+    if any(w in k for w in ("food", "meal", "dish", "eat", "lunch", "dinner", "breakfast", "snack", "starter", "main", "dessert")):
+        return "Here's our food menu 🍽️ — let me know what catches your eye and I'll sort it out for you!"
+    if any(w in k for w in ("menu", "carte")):
+        return "Here's the menu 📋 — have a look and tell me what you'd like!"
+
+    # --- SERVICES & CONSULTANCY ---
+    if any(w in k for w in ("service", "consult", "solution", "offering", "plan", "package", "tier", "subscription")):
+        return "Here are the services we offer 💼 — feel free to ask about any of them and I'll give you all the details!"
+    if any(w in k for w in ("treatment", "therapy", "spa", "wellness", "massage")):
+        return "Here are our treatments & wellness services 🌿 — let me know which one interests you!"
+
+    # --- CATALOG & PRODUCTS ---
+    if any(w in k for w in ("catalog", "catalogue", "brochure", "collection", "portfolio", "lookbook")):
+        return "Here's our full catalog 📖 — browse through and let me know what you like. I'm happy to share more details on anything!"
+    if any(w in k for w in ("product", "item", "range", "inventory")):
+        return "Here's a look at our products 🛍️ — let me know which one interests you!"
+
+    # --- PRICING ---
+    if any(w in k for w in ("price", "pricing", "rate", "cost", "fee", "tariff", "quote", "estimate")):
+        return "Here's our pricing list 💰 — let me know if you have any questions or need a custom quote!"
+
+    # --- PROFILE / ABOUT ---
+    if any(w in k for w in ("profile", "photo", "pic", "image", "photo", "selfie", "headshot", "portrait", "team", "staff", "about us", "about")):
+        return "Here you go! 😊 Feel free to ask if you'd like to know more about us."
+
+    # --- LOCATION & MAP ---
+    if any(w in k for w in ("location", "map", "address", "direction", "branch", "outlet", "store", "shop", "showroom")):
+        return "Here's how to find us 📍 — let me know if you need more directions or have any questions!"
+
+    # --- DOCUMENTS (invoice, receipt, report, etc.) ---
+    if media_type == "DOCUMENT":
+        if any(w in k for w in ("invoice", "receipt", "bill", "payment")):
+            return "Here's your invoice 🧾 — let me know if anything needs clarification!"
+        if any(w in k for w in ("report", "analysis", "summary")):
+            return "Here's the report 📊 — take a look and feel free to ask questions!"
+        return "Here's the document you requested 📄 — let me know if you need anything else!"
+
+    # --- DEFAULT IMAGE ---
+    return "Here it is! 😊 Let me know if you have any questions or would like to see more."
+
+
 async def _media_kind(url: str) -> str:
     """
     Decide whether a media URL is a 'DOCUMENT' (PDF) or 'IMAGE'. Uses the file
@@ -603,14 +654,54 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 "content": json.dumps(result),
             })
 
-        # Second call: let the model write the natural reply using tool results
-        try:
-            resp2 = await _groq_create(
-                groq, model=settings.groq_model, messages=messages, temperature=0.5, max_tokens=400,
-            )
-            final_reply = resp2.choices[0].message.content or final_reply
-        except Exception as e:
-            logger.warning(f"Groq follow-up failed: {e}")
+        # -----------------------------------------------------------------------
+        # CALL 2 — Smart template engine (zero tokens) for media sends.
+        # Only fall back to LLM when genuinely needed.
+        # -----------------------------------------------------------------------
+        
+        # Determine what kinds of tools were called
+        tool_names_called = {tc.function.name for tc in msg.tool_calls}
+        tool_results = {tc.function.name: json.loads(tc.function.arguments or "{}") for tc in msg.tool_calls}
+        
+        # Check if ALL tool results are "handled" by templates
+        needs_llm_call2 = False
+        ambiguous_candidates = []
+        
+        for tc in msg.tool_calls:
+            name = tc.function.name
+            # Parse result from messages list (last appended tool message per tool call)
+            try:
+                tool_result = json.loads(messages[-len(msg.tool_calls) + list(tool_names_called).index(name)]["content"])
+            except Exception:
+                tool_result = {}
+            
+            if name == "get_media":
+                status = (tool_result.get("status") or "")
+                if status == "ambiguous":
+                    ambiguous_candidates = tool_result.get("candidates", [])
+                    needs_llm_call2 = True  # LLM must format the options list
+                elif status == "not_found":
+                    needs_llm_call2 = True  # LLM handles "I don't have that"
+                # status == "sent" → template handles it ✅
+            elif name in ("search_catalog", "search_knowledge", "escalate_to_human"):
+                needs_llm_call2 = True  # These always need natural language
+        
+        if needs_llm_call2:
+            # LLM Call 2 only when necessary
+            try:
+                resp2 = await _groq_create(
+                    groq, model=settings.groq_model, messages=messages, temperature=0.5, max_tokens=400,
+                )
+                final_reply = resp2.choices[0].message.content or final_reply
+                logger.info("[CALL2] LLM used for complex/ambiguous response")
+            except Exception as e:
+                logger.warning(f"Groq follow-up failed: {e}")
+        
+        elif media_url and matched:
+            # Zero-token template: generate a context-aware reply from the media key name
+            final_reply = _media_reply_template(matched, media_type or "IMAGE")
+            logger.info(f"[CALL2] Skipped — using template for {matched!r} (0 tokens saved)")
+
 
     # Fallbacks
     if not final_reply:
