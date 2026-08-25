@@ -17,3 +17,4 @@ pymupdf==1.27.2.3
 python-multipart==0.0.32
 python-dotenv==1.2.2
 google-auth==2.34.0
+requests==2.32.3
