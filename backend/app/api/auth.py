@@ -10,6 +10,8 @@ import time
 import asyncio
 import httpx
 from datetime import datetime
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -96,6 +98,9 @@ class LoginIn(BaseModel):
     email: str
     password: str
 
+class GoogleLoginIn(BaseModel):
+    credential: str
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -147,3 +152,46 @@ async def login(body: LoginIn):
 
     token = _make_token(user["user_id"])
     return {"token": token, "name": user["name"], "email": user["email"]}
+
+
+@router.post("/api/auth/google")
+async def google_login(body: GoogleLoginIn):
+    if not settings.google_client_id:
+        raise HTTPException(status_code=500, detail="Google Auth is not configured on the server")
+    
+    try:
+        # Verify the token
+        idinfo = id_token.verify_oauth2_token(
+            body.credential, google_requests.Request(), settings.google_client_id
+        )
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+    email = idinfo.get("email")
+    name = idinfo.get("name", "Google User")
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Google token does not contain an email")
+        
+    db = get_db()
+    
+    user = await db.users.find_one({"email": email})
+    
+    if not user:
+        # Create a new user if they don't exist
+        user_id = f"user_{int(time.time())}_{email.split('@')[0]}"
+        user = {
+            "user_id": user_id,
+            "name": name,
+            "email": email,
+            "password_hash": _hash_password(os.urandom(16).hex()),
+            "created_at": datetime.utcnow(),
+        }
+        await db.users.insert_one(user)
+        
+    # Ping Evolution Go to wake it up
+    asyncio.create_task(_wake_evolution())
+
+    token = _make_token(user["user_id"])
+    return {"token": token, "name": user["name"], "email": user["email"]}
+

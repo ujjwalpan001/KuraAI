@@ -70,6 +70,20 @@ export async function login(email, password) {
   return data;
 }
 
+export async function googleLogin(credential) {
+  const res = await fetch(`${BASE}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+    body: JSON.stringify({ credential }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Google Sign-In failed");
+  localStorage.setItem("admin_token", data.token);
+  localStorage.setItem("user_name", data.name);
+  localStorage.setItem("user_email", data.email);
+  return data;
+}
+
 export function logout() {
   localStorage.removeItem("admin_token");
   localStorage.removeItem("user_name");

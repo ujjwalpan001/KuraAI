@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # Auth
     admin_password: str = ""
+    google_client_id: str = ""
 
     class Config:
         env_file = ".env"

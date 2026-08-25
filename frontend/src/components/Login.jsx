@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { login, signup } from "../api/client";
+import { login, signup, googleLogin } from "../api/client";
 import { Bot, Eye, EyeOff, Zap, ShieldCheck, LineChart } from "lucide-react";
+import { GoogleLogin } from '@react-oauth/google';
 
 /* ────────────────────────────────────────────────────────────
    WhatsAgent — Re-designed Dark Theme with Carousel
@@ -197,6 +198,23 @@ function LoginForm({ onSwitch, onSuccess }) {
         )}
 
         <SubmitButton loading={loading} label="Sign in to Dashboard" />
+
+        <div className="mt-4 flex justify-center">
+          <GoogleLogin
+            onSuccess={async (credentialResponse) => {
+              try {
+                await googleLogin(credentialResponse.credential);
+                onSuccess();
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+            onError={() => {
+              setError("Google Sign-In failed");
+            }}
+            theme="filled_black"
+          />
+        </div>
       </form>
 
       <div className="mt-6">
@@ -300,6 +318,23 @@ function SignupForm({ onSwitch, onSuccess }) {
         )}
 
         <SubmitButton loading={loading} label="Start free trial" />
+
+        <div className="mt-4 flex justify-center">
+          <GoogleLogin
+            onSuccess={async (credentialResponse) => {
+              try {
+                await googleLogin(credentialResponse.credential);
+                onSuccess();
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+            onError={() => {
+              setError("Google Sign-In failed");
+            }}
+            theme="filled_black"
+          />
+        </div>
       </form>
 
       <div className="mt-8 text-center pt-2">
