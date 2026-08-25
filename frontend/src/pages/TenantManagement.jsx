@@ -19,6 +19,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
         evolution_instance: activeObj.evolution_instance || "",
         llm_model: activeObj.llm_model || "llama-3.3-70b",
         personal_numbers: activeObj.personal_numbers || [],
+        rate_limit_per_minute: activeObj.rate_limit_per_minute ?? 25,
       });
     }
   }, [activeObj]);
@@ -204,6 +205,30 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                         <span>No instance linked — connect via <strong>WhatsApp Connect</strong> tab</span>
                       )}
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rate Limiting Config */}
+              <div className="bg-surface border border-hair rounded-xl p-6">
+                <h3 className="text-[15px] font-display font-semibold flex items-center gap-2 mb-4">
+                  <span className="w-4 h-4 flex items-center justify-center rounded-full bg-orange-500/10 text-orange-500">⚡</span>
+                  Rate Limiting
+                </h3>
+                <p className="text-[13px] text-muted mb-4">
+                  Set the maximum number of messages a single customer can send per minute. If they exceed this, the bot will silently drop their messages to protect your LLM costs from spam or DoS attacks. (Default: 25)
+                </p>
+                <div className="flex items-center gap-4">
+                  <div className="w-1/3">
+                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Max Msgs / Minute</label>
+                    <input 
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={formData.rate_limit_per_minute}
+                      onChange={e => setFormData({...formData, rate_limit_per_minute: parseInt(e.target.value) || 25})}
+                      className="w-full px-4 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono"
+                    />
                   </div>
                 </div>
               </div>

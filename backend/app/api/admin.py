@@ -90,6 +90,7 @@ class TenantIn(BaseModel):
     evolution_instance: str | None = None   # Evolution API instance name
     media_library: dict[str, str] = {}
     personal_numbers: list[str] = []
+    rate_limit_per_minute: int = 25
 
 
 @router.get("/tenants")
