@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Enterprise In-Memory Rate Limiter (Sliding Window)
 _rate_limit_cache: dict[str, list[float]] = defaultdict(list)
 RATE_LIMIT_WINDOW = 60  # 1 minute
-RATE_LIMIT_MAX = 10     # max messages per minute per phone number
+RATE_LIMIT_MAX = 25     # max messages per minute per phone number
 
 
 
