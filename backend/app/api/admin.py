@@ -211,13 +211,16 @@ async def admin_add_media(
         cloudinary.config()  # automatically parses CLOUDINARY_URL from env
 
     # Upload to Cloudinary
-    # We strip the extension for public_id, and Cloudinary will re-add it or keep it based on resource_type
-    safe_name = file.filename.rsplit('.', 1)[0] if file.filename else "upload"
+    is_pdf = file.filename and file.filename.lower().endswith(".pdf")
+    res_type = "raw" if is_pdf else "auto"
+    # For raw files, Cloudinary needs the extension in the public_id to serve the correct content-type
+    safe_name = file.filename if is_pdf else (file.filename.rsplit('.', 1)[0] if file.filename else "upload")
+    
     upload_result = cloudinary.uploader.upload(
         data, 
         folder=f"whatsagent/{tenant_id}/media", 
         public_id=safe_name,
-        resource_type="auto"
+        resource_type=res_type
     )
     url = upload_result.get("secure_url")
     await db.tenants.update_one(

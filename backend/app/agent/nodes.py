@@ -219,7 +219,8 @@ async def _handle_inbound_pdf(state: AgentState, db, pdf_bytes: bytes) -> None:
         upload_result = cloudinary.uploader.upload(
             pdf_bytes, 
             folder=f"whatsagent/{state['tenant_id']}/chats", 
-            resource_type="auto"
+            public_id=source_name,
+            resource_type="raw"
         )
         stored_url = upload_result.get("secure_url")
         await db.message_audit_log.update_one(
