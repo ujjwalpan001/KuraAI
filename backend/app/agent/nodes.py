@@ -312,25 +312,13 @@ async def _handle_inbound_image(state: AgentState, db, img_bytes: bytes) -> None
 # Node 3: LLM Reasoning
 # ---------------------------------------------------------------------------
 
-def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | None = None) -> str:
-    base = (tenant.get("system_prompt") or "").strip()
-    if not base:
-        # Fallback: if no system prompt is configured, use a generic one with the tenant name
-        name = tenant.get("name", "this business")
-        base = (
-            f"You are a helpful AI assistant for {name}. "
-            "Be friendly, concise, and professional. "
-            "Answer questions based on the knowledge base provided. "
-            "Never claim to be ChatGPT, Gemini, or any other AI product — you are a custom assistant."
-        )
-        logger.warning(f"[TENANT {tenant.get('tenant_id')}] No system_prompt configured — using fallback.")
-    prompt = base
+def _build_system_prompt(tenant: dict, catalog_names: list | None = None) -> str:
+    prompt = ""
 
-    # Tell the LLM what's in the catalog so it's HONEST about what exists — but CAP the
-    # list so a big catalog doesn't bloat the prompt (which blows Groq's per-minute limit).
+    # Tell the LLM what's in the catalog so it's HONEST about what exists
     if catalog_names:
         shown = catalog_names[:20]
-        prompt += "\n\n--- SAMPLE OF YOUR CATALOG ---\n"
+        prompt += "--- SAMPLE OF YOUR CATALOG ---\n"
         for n in shown:
             prompt += f"- {n}\n"
         if len(catalog_names) > len(shown):
@@ -338,56 +326,56 @@ def _build_system_prompt(tenant: dict, rag_chunks: list, catalog_names: list | N
         prompt += (
             "Use the search_catalog tool to find a specific product before describing or sending it. "
             "Never invent products you don't have; if you're unsure, search first or offer the full *catalog*.\n"
-            "--- END CATALOG ---\n"
+            "--- END CATALOG ---\n\n"
         )
 
-    # Tell the LLM EXACTLY what media files exist so it never promises
-    # or re-sends something it doesn't have.
+    # Tell the LLM EXACTLY what media files exist
     media_lib = tenant.get("media_library", {})
     if media_lib:
-        # Deduplicate by URL (e.g. 'catalog' and 'brochure' may share one file)
         seen_urls = {}
         for keyword, url in media_lib.items():
             seen_urls.setdefault(url, []).append(keyword)
-        prompt += "\n\n--- MEDIA YOU CAN SEND (via get_media tool) ---\n"
+        prompt += "--- MEDIA YOU CAN SEND (via get_media tool) ---\n"
         for url, keywords in seen_urls.items():
             kind = "PDF document" if url.lower().endswith(".pdf") else "image"
-            # Show humanized labels AND all raw keywords so LLM can match loosely
             human_labels = [k.replace("_", " ").replace("-", " ") for k in keywords]
             prompt += f"- {kind}: labels = {human_labels} → call get_media with the most relevant label\n"
         prompt += (
-            "IMPORTANT: When the user asks for any media using ANY synonym, related word, or rough description,"
-            " pick the CLOSEST label from the list above and call get_media with it. "
-            "For example: if labels include 'profile pic' and the user says 'send your photo', 'your pic', or 'image of you', "
-            "call get_media with keyword='profile pic'. Do NOT say you don't have it if a close match exists.\n"
-            "This is the COMPLETE list of files you have. You have exactly ONE file per item above.\n"
-            "If a customer asks for 'more' images or something not in this list, do NOT re-send the same "
-            "file. Instead, honestly say that's the piece you have on hand and offer the full *catalog* "
-            "to see the complete range. Only call get_media when the customer actually wants to receive a file.\n"
+            "IMPORTANT: When the user asks for any media using ANY synonym, related word, or rough description, "
+            "pick the CLOSEST label from the list above and call get_media with it. "
+            "Only call get_media when the customer actually wants to receive a file.\n"
             "DISAMBIGUATION RULE: If get_media returns status='ambiguous', do NOT send any file. "
-            "Instead, list the candidate options as a friendly numbered list and ask the user to pick. "
-            "Example: 'I have a few options — which one do you want?\n1️⃣ Food Menu\n2️⃣ Drinks Menu'. "
-            "Wait for their reply, then call get_media again with the exact choice.\n"
-            "--- END MEDIA LIST ---\n"
+            "Instead, list the candidate options as a friendly numbered list and ask the user to pick.\n"
+            "--- END MEDIA LIST ---\n\n"
         )
 
-    if rag_chunks:
-        prompt += "\n\n--- RELEVANT KNOWLEDGE BASE ---\n"
-        for i, chunk in enumerate(rag_chunks[:4], 1):     # cap count
-            prompt += f"\n[{i}] {chunk[:500]}\n"          # and length, to limit tokens
-        prompt += "\n--- END KNOWLEDGE BASE ---\n"
+    if not tenant.get("exclusive_prompt_mode"):
         prompt += (
-            "\nBase your answer on the knowledge base above. "
-            "Do not fabricate prices, specs, or policies not mentioned."
+            "IMPORTANT: If the user uses frustrated language, complains, or exhibits a negative sentiment, "
+            "you MUST immediately trigger the escalate_to_human tool so a live agent can take over.\n"
+            "CRITICAL LANGUAGE RULE: If the user writes in Hindi or Nepali using English letters (e.g., Roman Hindi / Roman Nepali / Hinglish), "
+            "you MUST reply in the exact same Roman script (Hinglish/Roman Nepali). Match their transliterated style exactly.\n\n"
         )
-        
-    prompt += (
-        "\n\nIMPORTANT: If the user uses frustrated language, complains, or exhibits a negative sentiment, "
-        "you MUST immediately trigger the escalate_to_human tool so a live agent can take over.\n"
-        "CRITICAL LANGUAGE RULE: If the user writes in Hindi or Nepali using English letters (e.g., Roman Hindi / Roman Nepali / Hinglish), "
-        "you MUST reply in the exact same Roman script (Hinglish/Roman Nepali). Do NOT reply in Devanagari script or pure English. "
-        "Match their transliterated style exactly."
+
+    name = tenant.get("name", "this business")
+    identity = (
+        f"You are the official AI virtual assistant for '{name}'. "
+        "You are NOT ChatGPT, you are NOT Gemini, and you do not work for OpenAI or Groq. "
+        f"You are exclusively an assistant for {name}.\n"
     )
+
+    base = (tenant.get("system_prompt") or "").strip()
+    if not base:
+        base = (
+            "Be friendly, concise, and professional. "
+            "Answer questions based on the knowledge base provided."
+        )
+
+    prompt += "--- CORE INSTRUCTIONS ---\n"
+    prompt += "You MUST strictly follow these instructions above all else:\n"
+    prompt += identity
+    prompt += base
+    
     return prompt
 
 
@@ -453,7 +441,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
         return state
 
     tenant = state["tenant_config"]
-    system_prompt = _build_system_prompt(tenant, state.get("rag_chunks") or [], state.get("catalog_names"))
+    system_prompt = _build_system_prompt(tenant, state.get("catalog_names"))
 
     # Build OpenAI-style message list: system + last-5 history + current
     messages = [{"role": "system", "content": system_prompt}]
@@ -463,6 +451,13 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             messages.append({"role": role, "content": m["text_content"]})
 
     user_text = state["inbound_text"]
+    
+    # Attach RAG chunks directly to the user's message so the System Prompt remains static and fully cached!
+    rag = state.get("rag_chunks") or []
+    if rag:
+        context = "\n".join([f"[{i}] {chunk[:500]}" for i, chunk in enumerate(rag[:4], 1)])
+        user_text = f"--- KNOWLEDGE BASE ---\n{context}\n\nBase your answer strictly on the knowledge base above.\n--- END KNOWLEDGE BASE ---\n\nCustomer says: {user_text}"
+        
     if state.get("inbound_image_description"):
         user_text = f"[Customer sent an image: {state['inbound_image_description']}]\n{user_text}"
     if state.get("inbound_doc_summary"):

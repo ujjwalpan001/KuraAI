@@ -177,6 +177,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
         llm_model: activeObj.llm_model || "llama-3.3-70b",
         personal_numbers: activeObj.personal_numbers || [],
         rate_limit_per_minute: activeObj.rate_limit_per_minute ?? 25,
+        exclusive_prompt_mode: activeObj.exclusive_prompt_mode || false,
       }));
     }
   }, [activeObj]);
@@ -369,6 +370,19 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                     className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y"
                     placeholder="You are a helpful assistant..."
                   />
+                  <div className="mt-4 flex items-center gap-3 bg-canvas p-4 rounded-lg border border-hair">
+                    <input 
+                      type="checkbox" 
+                      id="exclusiveMode"
+                      checked={formData.exclusive_prompt_mode || false}
+                      onChange={e => setFormData({...formData, exclusive_prompt_mode: e.target.checked})}
+                      className="w-4 h-4 accent-brand rounded border-hair cursor-pointer"
+                    />
+                    <div>
+                      <label htmlFor="exclusiveMode" className="text-[13px] font-semibold text-ink block cursor-pointer">Exclusive Prompt Mode</label>
+                      <p className="text-[12px] text-muted mt-1">If enabled, the AI will ONLY follow the prompt above. It will completely ignore all global superadmin rules (like human escalation and language rules).</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
