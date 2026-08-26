@@ -352,6 +352,14 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             "--- END MEDIA LIST ---\n\n"
         )
 
+    prompt += (
+        "WHATSAPP FORMATTING RULES (STRICTLY ENFORCED):\n"
+        "- NEVER use Markdown tables (`| Column |`). WhatsApp DOES NOT support them and they look terrible.\n"
+        "- NEVER use Markdown headers (`#` or `##`).\n"
+        "- Use ONLY basic WhatsApp formatting: *bold* for emphasis, and bullet points (`-`) for lists.\n"
+        "- Keep responses clean, readable, and mobile-friendly.\n\n"
+    )
+
     if not tenant.get("exclusive_prompt_mode"):
         master_prompt = global_settings.get("master_system_prompt", "").strip()
         if not master_prompt:
