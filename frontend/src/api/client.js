@@ -5,8 +5,10 @@ const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 // we rewrite the origin to our API base (localhost), which serves the same file.
 export function displayUrl(url) {
   if (!url) return url;
+  if (url.includes("cloudinary.com")) return url;
   try {
     const u = new URL(url);
+    // Only rewrite if it's a relative/local URL that we need to point to the backend API
     return BASE.replace(/\/$/, "") + u.pathname + u.search;
   } catch {
     return url;

@@ -211,9 +211,12 @@ async def admin_add_media(
         cloudinary.config()  # automatically parses CLOUDINARY_URL from env
 
     # Upload to Cloudinary
+    # We strip the extension for public_id, and Cloudinary will re-add it or keep it based on resource_type
+    safe_name = file.filename.rsplit('.', 1)[0] if file.filename else "upload"
     upload_result = cloudinary.uploader.upload(
         data, 
         folder=f"whatsagent/{tenant_id}/media", 
+        public_id=safe_name,
         resource_type="auto"
     )
     url = upload_result.get("secure_url")
@@ -316,9 +319,11 @@ async def admin_add_catalog_item(
     if settings.cloudinary_url:
         cloudinary.config()
 
+    safe_name = file.filename.rsplit('.', 1)[0] if file.filename else "upload"
     upload_result = cloudinary.uploader.upload(
         data, 
-        folder=f"whatsagent/{tenant_id}/catalog", 
+        folder=f"whatsagent/{tenant_id}/catalog",
+        public_id=safe_name,
         resource_type="image"
     )
     image_url = upload_result.get("secure_url")
