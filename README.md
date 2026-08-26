@@ -40,14 +40,74 @@ The stack was chosen specifically for low-latency AI messaging and stateless con
 * **LangGraph**: Serves as the AI orchestration layer. Chosen over LangChain's default agents because it allows defining cyclic graphs as deterministic state machines, ensuring the AI never goes off-script.
 * **Groq (LPU Inference)**: Powering both text (Llama 3.1 8B) and vision (Llama 3.2 11B). Chosen because WhatsApp users abandon bots if they have to wait 5+ seconds for a reply. Groq's blazing-fast Time-To-First-Token (TTFT) keeps the chat feeling instantaneous.
 * **React + Vite + TailwindCSS**: The frontend dashboard stack. Chosen for rapid UI iteration, incredibly fast HMR during development, and minimal bundle sizes for production.
-* **MongoDB + GridFS**: The primary operational database. Because LLM memory and LangGraph state can be highly unstructured, a NoSQL document database is superior. GridFS was used to natively store PDF/Image blobs, entirely removing the need for a separate AWS S3 bucket.
-* **ChromaDB**: The local vector database. Chosen for its speed and lightweight integration for generating embeddings and performing semantic search on tenant catalogs and PDFs.
+* **MongoDB Atlas**: The primary operational database. Because LLM memory and LangGraph state can be highly unstructured, a NoSQL document database is superior.
+* **Qdrant (Vector DB)**: The ultra-fast cloud vector database. Chosen to execute semantic search across tenant catalogs and PDFs while strictly enforcing multi-tenancy filters.
+* **Cloudinary**: The global CDN and media warehouse. Chosen to offload heavy image and PDF serving from the backend, reducing bandwidth costs and ensuring instantaneous WhatsApp media delivery.
+* **Upstash Redis**: An enterprise-grade, in-memory cache used to power a sliding-window rate limiter. It instantly blocks spam at the edge before it can rack up expensive LLM API calls.
 
 ---
 
-## 🏗️ System Architecture & LangGraph Breakdown
+## 🏗️ System Architecture & Database Workflow
 
-The platform leverages an asynchronous, event-driven architecture to ensure webhook endpoints respond within the gateway's stringent timeout limits, while complex LLM reasoning happens reliably in the background.
+The platform leverages an asynchronous, event-driven architecture with strict multi-tenancy enforced across four cloud databases.
+
+```mermaid
+graph TD
+    %% Core External Endpoints
+    WhatsApp[WhatsApp User] <-->|Messages/Media| Evo(Evolution Go Gateway)
+    AdminUI[Restaurant Admin Dashboard] <-->|Uploads/Config| Fast(FastAPI Backend)
+    Evo <-->|Webhooks| Fast
+
+    %% The 4 Databases
+    subgraph "Cloud Infrastructure Layer"
+        Redis[(Upstash Redis)]
+        Mongo[(MongoDB Atlas)]
+        Qdrant[(Qdrant Vector DB)]
+        Cloudinary[(Cloudinary Storage)]
+    end
+
+    %% Workflow 1: Admin Uploading a Menu PDF
+    AdminUI -- "1. Uploads menu.pdf" --> Fast
+    Fast -- "2. Streams File" --> Cloudinary
+    Cloudinary -. "3. Returns Public URL" .-> Fast
+    Fast -- "4. Extracts Text & Embeds" --> Qdrant
+    Fast -- "5. Saves URL to Tenant Profile" --> Mongo
+
+    %% Workflow 2: WhatsApp Chat & Rate Limiting
+    WhatsApp -- "6. 'How much is a Burger?'" --> Evo
+    Evo -- "7. Incoming Webhook" --> Fast
+    Fast -- "8. Check Spam Limit" --> Redis
+    Redis -. "Allow" .-> Fast
+
+    %% Workflow 3: AI Answering
+    Fast -- "9. Fetch Tenant Config" --> Mongo
+    Mongo -. "tenant_id: rest_1" .-> Fast
+    Fast -- "10. Search Prices (Filter: rest_1)" --> Qdrant
+    Qdrant -. "Returns Text Chunks" .-> Fast
+    Fast -- "11. Groq LLM Generation" --> Fast
+    Fast -- "12. Send Final Answer" --> Evo
+
+    %% Styling
+    classDef external fill:#25D366,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef backend fill:#3178C6,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef db fill:#F6821F,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef storage fill:#3448C5,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef cache fill:#D82C20,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef vector fill:#6D28D9,stroke:#fff,stroke-width:2px,color:#fff;
+
+    class WhatsApp,Evo external;
+    class Fast,AdminUI backend;
+    class Mongo db;
+    class Cloudinary storage;
+    class Redis cache;
+    class Qdrant vector;
+```
+
+---
+
+## 🤖 LangGraph AI Workflow Breakdown
+
+To ensure the endpoints respond within the gateway's stringent timeout limits, complex LLM reasoning happens in a detached background state machine.
 
 ```mermaid
 flowchart TD
@@ -92,13 +152,13 @@ flowchart TD
     end
 
     subgraph External AI & Data Services
-        Chroma[(ChromaDB\nVector Space)]:::db
+        QdrantDB[(Qdrant Cloud\nVector Space)]:::db
         MongoState[(MongoDB:\nSessions & Audit)]:::db
         GroqVision[Groq Llama 3.2\nVision]:::llm
         Groq[Groq Llama 3.1/3.3\nInference]:::llm
     end
 
-    NodeContext -- "Semantic Search" --> Chroma
+    NodeContext -- "Semantic Search" --> QdrantDB
     NodeContext -- "Analyze Image" --> GroqVision
     NodeReason -- "Context + Tool Schema" --> Groq
     Groq -- "Generates Tool Calls / Final Answer" --> NodeReason
@@ -117,7 +177,7 @@ To prevent unpredictable black-box loops, the AI core is built on a deterministi
 The agent's memory for a single execution loop is strictly typed in Python via `TypedDict`. Key components include:
 * **Context Identifiers**: `tenant_id` & `session_id`. Used for routing and DB lookups.
 * **Inbound Payloads**: `inbound_text` & `inbound_media_type` (raw messages, images, PDFs).
-* **Injected Context**: `chat_history` (MongoDB), `rag_chunks` (ChromaDB), and `inbound_image_description` (Groq Vision output).
+* **Injected Context**: `chat_history` (MongoDB), `rag_chunks` (Qdrant), and `inbound_image_description` (Groq Vision output).
 * **Outbound Generation**: `llm_reply` & `media_to_send` (the final output destined for Meta).
 * **Lifecycle Enum**: `session_status` (`WAITING_FOR_BOT`, `AGENT_RESPONDING`, `NEEDS_HUMAN`) controlling human handoff.
 
@@ -128,7 +188,7 @@ The graph is designed as a direct pipeline with 4 distinct nodes:
    - **Action**: Instantly fires a WhatsApp "Read Receipt" and "Typing..." indicator to reduce user drop-off while the LLM thinks.
    - **Edge**: Flows directly to `context_retriever_node`.
 2. **`context_retriever_node`**
-   - **Action**: Queries ChromaDB (RAG) based on the customer's text. If the customer sent an image, it halts to query Groq Vision to generate a description.
+   - **Action**: Queries Qdrant (RAG) based on the customer's text. If the customer sent an image, it halts to query Groq Vision to generate a description.
    - **Edge**: Flows to `llm_reasoning_node`.
 3. **`llm_reasoning_node`**
    - **Action**: Assembles a massive context window (Persona + RAG Chunks + Media Availability + Conversation History). Calls Groq for reasoning and tool calling.
@@ -143,8 +203,8 @@ The graph is designed as a direct pipeline with 4 distinct nodes:
 
 The `llm_reasoning_node` grants the LLM access to specific bound tools, allowing it to interact with the broader system securely:
 
-1. `search_catalog(query: str)`: Executes a vector search against the ChromaDB catalog collection to find matching e-commerce products (with images, prices, and AI-generated descriptions).
-2. `get_media(keyword: str)`: Allows the LLM to pull specific PDF brochures, manuals, or images from the MongoDB GridFS media library to attach to the outbound WhatsApp message.
+1. `search_catalog(query: str)`: Executes a vector search against the Qdrant catalog collection to find matching e-commerce products (with images, prices, and AI-generated descriptions).
+2. `get_media(keyword: str)`: Allows the LLM to pull specific PDF brochures, manuals, or images from the MongoDB media library (hosted via Cloudinary) to attach to the outbound WhatsApp message.
 3. `escalate_to_human(reason: str)`: A critical tool that instantly pauses the AI execution pipeline and updates the session status in MongoDB, notifying the human operators on the frontend.
 
 ---
