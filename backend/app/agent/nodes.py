@@ -10,8 +10,7 @@ from app.agent.state import AgentState
 from app.agent.tools import TOOLS
 from app.config import settings
 from app.db.mongodb import get_db
-from app.rag.qdrant_client import search_knowledge_base, search_catalog, ensure_index_ready
-from app.storage import gridfs
+from app.rag.qdrant_client import search_knowledge_base, search_catalog
 from app.whatsapp import client as wa
 
 logger = logging.getLogger(__name__)
@@ -157,9 +156,7 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     ).sort("timestamp", -1).limit(5).to_list(5)
     state["chat_history"] = list(reversed(msgs))
 
-    # RAG — make sure the in-memory index is built (Render free tier loses it on sleep/restart;
-    # without this, the request that wakes the service would query an empty index).
-    await ensure_index_ready()
+    # RAG - Qdrant cloud is always ready
     state["rag_chunks"] = search_knowledge_base(
         query=state["inbound_text"],
         tenant_id=state["tenant_id"],
