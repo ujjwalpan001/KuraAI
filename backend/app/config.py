@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # LLM
     groq_api_key: str                          # PRIMARY — required
-    groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = ""
     gemini_api_key: str = ""                   # OPTIONAL — for vision / multimodal
     gemini_model: str = "gemini-2.0-flash"
 

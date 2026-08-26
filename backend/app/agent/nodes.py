@@ -30,10 +30,7 @@ async def _groq_create(groq, **kwargs):
             last = e
             m = str(e).lower()
             
-            if "does not exist" in m or "model_not_found" in m or "no access" in m or "decommissioned" in m:
-                logger.warning(f"Groq model {kwargs.get('model')} not accessible or decommissioned. Falling back to mixtral-8x7b-32768.")
-                kwargs["model"] = "mixtral-8x7b-32768"
-                continue
+            # Removed hardcoded fallback per user request; strictly respect the environment variable.
                 
             if any(w in m for w in ("rate", "429", "limit", "timeout", "temporar", "overload", "503")):
                 wait = 2 * (attempt + 1)
