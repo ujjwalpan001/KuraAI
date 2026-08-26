@@ -133,8 +133,9 @@ async def seed_tenants_if_empty() -> None:
 async def seed_admin_if_empty() -> None:
     db = get_db()
     users_to_seed = [
-        {"email": "uzwalpandey1234@gmail.com", "pass": "Ujjawal@9804", "name": "Ujjawal Pandey"},
-        {"email": "kanchanyadav050111@gmail.com", "pass": "Kanchan@050111", "name": "Kanchan Yadav"}
+        {"email": "kuraai.admin@gmail.com", "pass": "Kuraai@9804", "name": "Kura Super Admin", "role": "SUPER_ADMIN"},
+        {"email": "uzwalpandey1234@gmail.com", "pass": "Ujjawal@9804", "name": "Ujjawal Pandey", "role": "CLIENT"},
+        {"email": "kanchanyadav050111@gmail.com", "pass": "Kanchan@050111", "name": "Kanchan Yadav", "role": "CLIENT"}
     ]
     for u in users_to_seed:
         existing = await db.users.find_one({"email": u["email"]})
@@ -145,6 +146,7 @@ async def seed_admin_if_empty() -> None:
                 "name": u["name"],
                 "email": u["email"],
                 "password_hash": _hash_password(u["pass"]),
+                "role": u.get("role", "CLIENT"),
                 "created_at": datetime.utcnow(),
             })
             print(f"Seeded admin user: {u['email']}")

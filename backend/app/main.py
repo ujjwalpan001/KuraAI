@@ -61,12 +61,20 @@ app.add_middleware(
 # Static files (PDFs, images for tenant media library)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+from fastapi import Depends
+from app.api.auth import require_user
+
 app.include_router(webhook_router)
-app.include_router(dashboard_router)
 app.include_router(files_router)
 app.include_router(auth_router)
-app.include_router(admin_router)
 app.include_router(contact_router)
+
+# Secured routes (Require login)
+app.include_router(dashboard_router, dependencies=[Depends(require_user)])
+app.include_router(admin_router, dependencies=[Depends(require_user)])
+
+from app.api.superadmin import router as superadmin_router
+app.include_router(superadmin_router)
 
 
 @app.get("/health")
@@ -79,3 +87,10 @@ async def health():
 @app.head("/")
 async def root():
     return Response(status_code=200)
+
+@app.get("/api/public/settings")
+async def get_public_settings():
+    from app.db.mongodb import get_db
+    db = get_db()
+    settings = await db.platform_settings.find_one({"id": "global"}, {"_id": 0})
+    return {"settings": settings or {}}

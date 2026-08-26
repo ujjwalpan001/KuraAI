@@ -390,6 +390,13 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     # -----------------------------------------------------------------------
     tenant = await db.tenants.find_one({"tenant_id": tenant_id})
     if tenant:
+        client_id = tenant.get("client_id")
+        if client_id:
+            client = await db.users.find_one({"user_id": client_id})
+            if client and client.get("status") == "SUSPENDED":
+                logger.warning(f"Ignored message for suspended client: {client_id}")
+                return Response(status_code=200)
+                
         p_nums = tenant.get("personal_numbers", [])
         sender_alt = message_data.get("sender_alt_phone")
         

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { api, isLoggedIn, logout } from "./api/client";
+import { api, isLoggedIn, logout, getUser, getUserRole } from "./api/client";
 import Login from "./components/Login";
 import Layout from "./components/Layout";
 
@@ -10,8 +10,8 @@ import Analytics from "./pages/Analytics";
 import Broadcasts from "./pages/Broadcasts";
 import MediaLibrary from "./pages/MediaLibrary";
 import TenantManagement from "./pages/TenantManagement";
-import WhatsAppConnect from "./pages/WhatsAppConnect";
 import Landing from "./pages/Landing";
+import SuperAdmin from "./pages/SuperAdmin";
 
 // Force logout on initial load for demo purposes so the Landing/Login page always comes first
 if (!sessionStorage.getItem("demo_init")) {
@@ -36,7 +36,7 @@ export default function App() {
 function Console() {
   const [tenants, setTenants] = useState([]);
   const [activeTenant, setActiveTenant] = useState(null);
-  const [view, setView] = useState("overview");
+  const [view, setView] = useState(getUserRole() === "SUPER_ADMIN" ? "sa-overview" : "overview");
 
   const loadTenants = useCallback(() => {
     return api.getTenants().then((d) => {
@@ -51,8 +51,6 @@ function Console() {
 
   const renderPage = () => {
     switch (view) {
-      case "whatsapp-connect":
-        return <WhatsAppConnect tenants={tenants} />;
       case "overview":
         return <DashboardOverview tenantId={activeTenant} />;
       case "live-chats":
@@ -65,33 +63,18 @@ function Console() {
         return <TenantManagement tenants={tenants} activeTenant={activeTenant} onSelectTenant={setActiveTenant} onTenantsChanged={loadTenants} />;
       case "analytics":
         return <Analytics tenantId={activeTenant} />;
+      case "sa-overview":
+        return <SuperAdmin user={{...getUser(), role: getUserRole()}} activeTab="dashboard" />;
+      case "sa-clients":
+        return <SuperAdmin user={{...getUser(), role: getUserRole()}} activeTab="clients" />;
+      case "sa-settings":
+        return <SuperAdmin user={{...getUser(), role: getUserRole()}} activeTab="settings" />;
       case "settings":
+        // This is for CLIENT role settings
         return (
            <div className="p-8 max-w-4xl mx-auto">
               <h1 className="text-2xl font-display font-semibold mb-2 text-ink">Settings</h1>
-              <p className="text-[14px] text-muted mb-8">Global configuration for the Kura platform.</p>
-                            <div className="space-y-6">
-                <div className="bg-surface border border-hair rounded-xl p-6">
-                  <h3 className="text-[15px] font-display font-semibold mb-4">Global API Keys</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Groq API Key (Llama 3)</label>
-                      <input type="password" placeholder="gsk_..." className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution API URL</label>
-                      <input type="text" placeholder="http://localhost:8080" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution API Key</label>
-                      <input type="password" placeholder="Your Evolution API global key" className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono" />
-                    </div>
-                  </div>
-                  <button className="mt-6 bg-surface border border-hair text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-canvas transition-colors">
-                    Save Global Settings
-                  </button>
-                </div>
-              </div>
+              <p className="text-[14px] text-muted mb-8">Tenant configuration.</p>
            </div>
         );
       default:

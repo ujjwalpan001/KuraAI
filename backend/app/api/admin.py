@@ -9,11 +9,12 @@ import logging
 from uuid import uuid4
 from datetime import datetime
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 
 from app.config import settings
 from app.db.mongodb import get_db
+from app.api.auth import require_user
 from app.storage import gridfs
 from app.rag.chroma_client import build_chroma_index, index_upsert, index_remove, catalog_doc_text
 from app.whatsapp import client as wa_client
@@ -94,9 +95,13 @@ class TenantIn(BaseModel):
 
 
 @router.get("/tenants")
-async def admin_list_tenants():
+async def admin_list_tenants(user: dict = Depends(require_user)):
     db = get_db()
-    tenants = await db.tenants.find({}, {"_id": 0}).to_list(None)
+    query = {}
+    if user.get("role") != "SUPER_ADMIN":
+        query["client_id"] = user["user_id"]
+        
+    tenants = await db.tenants.find(query, {"_id": 0}).to_list(None)
     for t in tenants:
         t.pop("whatsapp_access_token", None)
         t["chat_count"] = await db.chat_sessions.count_documents({"tenant_id": t["tenant_id"]})
@@ -104,13 +109,14 @@ async def admin_list_tenants():
 
 
 @router.post("/tenants")
-async def admin_create_tenant(body: TenantIn):
+async def admin_create_tenant(body: TenantIn, user: dict = Depends(require_user)):
     db = get_db()
     if await db.tenants.find_one({"tenant_id": body.tenant_id}):
         raise HTTPException(409, "A tenant with that id already exists")
     doc = body.model_dump()
     doc["is_active"] = True
     doc["created_at"] = datetime.utcnow()
+    doc["client_id"] = user["user_id"]
     await db.tenants.insert_one(doc)
     return {"ok": True, "tenant_id": body.tenant_id}
 

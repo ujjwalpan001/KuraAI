@@ -76,12 +76,24 @@ def verify_token(token: str) -> str | None:
         return None
 
 
-def require_admin(authorization: str = Header(default="")):
-    """FastAPI dependency — raises 401 unless a valid bearer token is present."""
+async def require_user(authorization: str = Header(default="")):
+    """FastAPI dependency — raises 401 unless a valid bearer token is present. Returns the user object."""
     token = authorization.replace("Bearer ", "").strip()
-    if not verify_token(token):
+    user_id = verify_token(token)
+    if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return True
+    db = get_db()
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+async def require_super_admin(user: dict = __import__("fastapi").Depends(require_user)):
+    """FastAPI dependency — raises 403 unless the user is a SUPER_ADMIN."""
+    if user.get("role") != "SUPER_ADMIN":
+        raise HTTPException(status_code=403, detail="Super Admin privileges required")
+    return user
 
 
 # ── Request/Response models ───────────────────────────────────────────────────
@@ -106,4 +118,4 @@ async def login(body: LoginIn):
     asyncio.create_task(_wake_evolution())
 
     token = _make_token(user["user_id"])
-    return {"token": token, "name": user["name"], "email": user["email"]}
+    return {"token": token, "name": user["name"], "email": user["email"], "role": user.get("role", "CLIENT")}

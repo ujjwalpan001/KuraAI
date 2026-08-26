@@ -130,8 +130,10 @@ function LoginForm({ onSuccess }) {
     if (!form.email || !form.password) { setError("Please enter your email and password"); return; }
     setLoading(true); setError("");
     try {
-      await login(form.email, form.password);
-      onSuccess();
+      const data = await login(form.email, form.password);
+      if (data.token) {
+        onSuccess();
+      }
     } catch (err) {
       setError(err.message);
     } finally {

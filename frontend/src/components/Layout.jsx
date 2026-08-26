@@ -13,9 +13,12 @@ import {
   Menu,
   UserX,
   Smartphone,
-  Bot
+  Bot,
+  ShieldAlert,
+  Building,
+  MonitorPlay
 } from "lucide-react";
-import { getUser, logout, api } from "../api/client";
+import { getUser, getUserRole, logout, api } from "../api/client";
 
 const NAVIGATION = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -23,7 +26,6 @@ const NAVIGATION = [
   { id: "broadcasts", label: "Broadcasts", icon: Megaphone },
   { id: "media-library", label: "Media Library", icon: ImageIcon },
   { id: "tenants", label: "Tenants", icon: Users },
-  { id: "whatsapp-connect", label: "WhatsApp Connect", icon: Smartphone },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -31,7 +33,16 @@ const NAVIGATION = [
 export default function Layout({ view, onViewChange, children, activeTenantName, tenants, onSelectTenant, activeTenant }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user = getUser();
+  const role = getUserRole();
   const initials = (user?.name || "Admin").slice(0, 2).toUpperCase();
+
+  const navItems = role === "SUPER_ADMIN" 
+    ? [
+        { id: "sa-overview", label: "Overview", icon: LayoutDashboard },
+        { id: "sa-clients", label: "Clients & Billing", icon: Building },
+        { id: "sa-settings", label: "CMS Settings", icon: MonitorPlay }
+      ]
+    : NAVIGATION;
 
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
   
@@ -84,7 +95,7 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
         </div>
 
         <nav className="flex-1 py-2 px-4 space-y-2 overflow-y-auto custom-scrollbar">
-          {NAVIGATION.map((nav) => {
+          {navItems.map((nav) => {
             const active = view === nav.id;
             return (
               <button
@@ -147,14 +158,15 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
             </button>
 
             {/* Premium Custom Tenant Switcher */}
-            <div className="relative">
-              <button 
-                onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
-                className="h-10 flex items-center gap-3 px-4 border border-white/10 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] transition-all focus:outline-none focus:border-indigo-500/50 backdrop-blur-md shadow-lg"
-              >
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[11px] font-bold shadow-inner">
-                  {activeTenantName ? activeTenantName.charAt(0).toUpperCase() : "T"}
-                </div>
+            {role !== "SUPER_ADMIN" && (
+              <div className="relative">
+                <button 
+                  onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
+                  className="h-10 flex items-center gap-3 px-4 border border-white/10 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] transition-all focus:outline-none focus:border-indigo-500/50 backdrop-blur-md shadow-lg"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[11px] font-bold shadow-inner">
+                    {activeTenantName ? activeTenantName.charAt(0).toUpperCase() : "T"}
+                  </div>
                 <span className="text-[14px] font-medium text-white max-w-[140px] truncate tracking-wide">
                   {activeTenantName || "Select Tenant"}
                 </span>
@@ -202,7 +214,8 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
                   </div>
                 </>
               )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-6">

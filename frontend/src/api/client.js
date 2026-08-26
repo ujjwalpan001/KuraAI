@@ -53,6 +53,7 @@ export async function login(email, password) {
   localStorage.setItem("admin_token", data.token);
   localStorage.setItem("user_name", data.name);
   localStorage.setItem("user_email", data.email);
+  localStorage.setItem("user_role", data.role || "CLIENT");
   return data;
 }
 
@@ -60,10 +61,15 @@ export function logout() {
   localStorage.removeItem("admin_token");
   localStorage.removeItem("user_name");
   localStorage.removeItem("user_email");
+  localStorage.removeItem("user_role");
 }
 
 export function isLoggedIn() {
   return !!localStorage.getItem("admin_token");
+}
+
+export function getUserRole() {
+  return localStorage.getItem("user_role") || "CLIENT";
 }
 
 export function getUser() {
@@ -148,4 +154,14 @@ export const api = {
     send(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}/logout`, "POST", {}),
   evoDeleteInstance: (instanceName, tenantId) =>
     send(`/api/admin/evolution/instances/${encodeURIComponent(instanceName)}?tenant_id=${encodeURIComponent(tenantId || "")}`, "DELETE"),
+    
+  // superadmin
+  saGetMetrics: () => get("/api/superadmin/metrics"),
+  saGetSettings: () => get("/api/superadmin/settings"),
+  saUpdateSettings: (p) => send("/api/superadmin/settings", "PUT", p),
+  saCreateClient: (p) => send("/api/superadmin/clients", "POST", p),
+  saUpdateClientStatus: (id, status) => send(`/api/superadmin/clients/${id}/status?status=${status}`, "PUT", {}),
+  saDeleteClient: (id) => send(`/api/superadmin/clients/${id}`, "DELETE"),
+  saGetMessages: () => get("/api/superadmin/messages"),
+  saUpdateTenantLimits: (id, limits) => send(`/api/superadmin/tenants/${id}/limits`, "PUT", limits)
 };

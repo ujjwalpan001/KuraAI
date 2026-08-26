@@ -1,7 +1,163 @@
-import { useState, useEffect } from "react";
-import { Users, Bot, Key, Phone, Save, Search, Plus, Edit2, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Users, Bot, Key, Phone, Save, Search, Plus, Edit2, X, Smartphone, Wifi, WifiOff, RefreshCw, LogOut, QrCode, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { themeFor } from "../tenants";
 import { api } from "../api/client";
+
+const STATE_COLORS = { open: "text-emerald-400", connecting: "text-amber-400", close: "text-rose-400", error: "text-rose-400" };
+const STATE_ICONS = { open: CheckCircle2, connecting: Loader2, close: WifiOff, error: AlertCircle };
+const STATE_LABELS = { open: "Connected", connecting: "Connecting...", close: "Disconnected", error: "Error" };
+
+function WhatsAppPanel({ instanceName, tenantId, onCreated }) {
+  const [qr, setQr] = useState(null);
+  const [state, setState] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [action, setAction] = useState("");
+  const pollRef = useRef(null);
+
+  const fetchState = async () => {
+    if (!instanceName) return "close";
+    try {
+      const res = await api.evoGetState(instanceName);
+      const s = res?.state?.instance?.state || res?.state?.state || "close";
+      setState(s);
+      return s;
+    } catch {
+      setState("error");
+      return "error";
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    if (instanceName) {
+      const getStatus = async () => {
+        const s = await fetchState();
+        if (!isMounted) return;
+      };
+      
+      getStatus();
+      pollRef.current = setInterval(getStatus, 5000);
+      return () => {
+        isMounted = false;
+        clearInterval(pollRef.current);
+      };
+    }
+  }, [instanceName]);
+
+  const handleCreate = async () => {
+    setLoading(true);
+    try {
+      await api.evoCreateInstance(tenantId, tenantId);
+      onCreated(tenantId);
+    } catch (e) {
+      alert("Failed to create instance: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGetQR = async () => {
+    setLoading(true); setAction("qr");
+    try {
+      const res = await api.evoGetQR(instanceName);
+      setQr(res?.qr?.base64 || res?.qr?.code || null);
+    } catch (e) {
+      alert("Failed to get QR: " + e.message);
+    } finally {
+      setLoading(false); setAction("");
+    }
+  };
+
+  const handleRestart = async () => {
+    setLoading(true); setAction("restart");
+    try {
+      await api.evoRestartInstance(instanceName);
+      setQr(null); await fetchState();
+    } catch (e) {
+      alert("Failed to restart: " + e.message);
+    } finally {
+      setLoading(false); setAction("");
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!confirm(`Log out ${instanceName} from WhatsApp? You'll need to scan QR again.`)) return;
+    setLoading(true); setAction("logout");
+    try {
+      await api.evoLogoutInstance(instanceName);
+      setQr(null); setState("close");
+    } catch (e) {
+      alert("Failed to logout: " + e.message);
+    } finally {
+      setLoading(false); setAction("");
+    }
+  };
+
+  if (!instanceName) {
+    return (
+      <div className="w-full px-4 py-4 bg-canvas border border-hair rounded-xl flex items-center justify-between">
+        <div>
+          <div className="text-[13px] font-semibold text-ink">No WhatsApp Instance Linked</div>
+          <div className="text-[11px] text-muted mt-1">Create a dedicated connection for this workspace.</div>
+        </div>
+        <button onClick={handleCreate} disabled={loading} className="px-4 py-2 bg-brand text-white text-[12px] font-bold rounded-lg hover:bg-brand-deep transition-all">
+          {loading ? "CREATING..." : "CREATE CONNECTION"}
+        </button>
+      </div>
+    );
+  }
+
+  const connState = state || "close";
+  const StateIcon = STATE_ICONS[connState] || AlertCircle;
+  const stateColor = STATE_COLORS[connState] || "text-muted";
+  const stateLabel = STATE_LABELS[connState] || connState;
+  const isConnected = connState === "open";
+
+  return (
+    <div className="w-full bg-canvas border border-hair rounded-xl overflow-hidden">
+      <div className="p-4 border-b border-hair flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isConnected ? "bg-emerald-500/15" : "bg-muted/10"}`}>
+            <Smartphone size={18} className={isConnected ? "text-emerald-400" : "text-muted"} />
+          </div>
+          <div>
+            <div className="text-[13px] font-semibold text-ink">{instanceName}</div>
+            <div className={`flex items-center gap-1.5 mt-0.5 text-[11px] font-medium ${stateColor}`}>
+              <StateIcon size={10} className={connState === "connecting" ? "animate-spin" : ""} />
+              {stateLabel}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {!isConnected && (
+            <button onClick={handleGetQR} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-brand bg-brand/10 rounded-lg hover:bg-brand/20 transition-colors">
+              {loading && action === "qr" ? <Loader2 size={12} className="animate-spin" /> : <QrCode size={12} />}
+              Scan QR
+            </button>
+          )}
+          {isConnected && (
+            <button onClick={handleLogout} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-amber-500 bg-amber-500/10 rounded-lg hover:bg-amber-500/20 transition-colors">
+              {loading && action === "logout" ? <Loader2 size={12} className="animate-spin" /> : <LogOut size={12} />}
+              Disconnect
+            </button>
+          )}
+          <button onClick={handleRestart} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted border border-hair rounded-lg hover:bg-surface transition-colors">
+            {loading && action === "restart" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+            Restart
+          </button>
+        </div>
+      </div>
+      
+      {qr && !isConnected && (
+        <div className="p-6 flex flex-col items-center justify-center bg-white border-t border-hair">
+          <img src={qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`} alt="QR Code" className="w-48 h-48 mb-4 border border-hair rounded-xl p-2" />
+          <p className="text-[12px] text-gray-500 font-medium">Scan this code with WhatsApp (Linked Devices)</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TenantManagement({ tenants, activeTenant, onSelectTenant, onTenantsChanged }) {
   const [q, setQ] = useState("");
@@ -14,13 +170,14 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
 
   useEffect(() => {
     if (activeObj) {
-      setFormData({
+      setFormData(prev => ({
+        ...prev,
         system_prompt: activeObj.system_prompt || "",
         evolution_instance: activeObj.evolution_instance || "",
         llm_model: activeObj.llm_model || "llama-3.3-70b",
         personal_numbers: activeObj.personal_numbers || [],
         rate_limit_per_minute: activeObj.rate_limit_per_minute ?? 25,
-      });
+      }));
     }
   }, [activeObj]);
 
@@ -157,56 +314,19 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
               {/* WhatsApp / Evolution Config */}
               <div className="bg-surface border border-hair rounded-xl p-6">
                 <h3 className="text-[15px] font-display font-semibold flex items-center gap-2 mb-4">
-                  <Phone size={16} className="text-emerald-500" /> WhatsApp Integration
+                  <Phone size={16} className="text-emerald-500" /> WhatsApp Connection
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Evolution Instance Name</label>
-                    {formData.evolution_instance && !editingInstance ? (
-                      <div className="flex items-center justify-between w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink font-mono">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          {formData.evolution_instance}
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setFormData({...formData, evolution_instance: ""});
-                          }} 
-                          className="text-muted hover:text-rose-400 transition-colors"
-                          title="Unlink this instance"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <select
-                        value={formData.evolution_instance || ""}
-                        onChange={e => {
-                           setFormData({...formData, evolution_instance: e.target.value});
-                           setEditingInstance(false);
-                        }}
-                        className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono"
-                      >
-                        <option value="">No instance linked</option>
-                        {instances.map(inst => {
-                          const name = inst.name || inst.instanceName;
-                          return <option key={name} value={name}>{name}</option>;
-                        })}
-                      </select>
-                    )}
-                    <p className="text-[11px] text-muted mt-1">Select an active instance from <strong>WhatsApp Connect</strong> to link it to this workspace.</p>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">Status</label>
-                    <div className="w-full px-3 py-2 bg-canvas border border-hair rounded-lg text-[13px] text-muted">
-                      {formData.evolution_instance ? (
-                        <span className="text-emerald-400 font-medium">✓ Instance configured — check <strong>WhatsApp Connect</strong> for QR/status</span>
-                      ) : (
-                        <span>No instance linked — connect via <strong>WhatsApp Connect</strong> tab</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <WhatsAppPanel 
+                  instanceName={formData.evolution_instance} 
+                  tenantId={activeTenant} 
+                  onCreated={(newInstanceName) => {
+                    setFormData({...formData, evolution_instance: newInstanceName});
+                    // Instantly save it to backend so the tenant officially links the new instance
+                    api.updateTenant(activeTenant, {...formData, evolution_instance: newInstanceName})
+                      .then(() => { if (onTenantsChanged) onTenantsChanged(); })
+                      .catch(e => console.error(e));
+                  }}
+                />
               </div>
 
               {/* Rate Limiting Config */}

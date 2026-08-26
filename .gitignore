@@ -10,6 +10,8 @@ backend/venv/
 venv/
 .env.local
 .env.*.local
+create_user.py
+wipe_db.py
 
 # Python
 __pycache__/

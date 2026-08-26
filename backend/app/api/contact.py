@@ -22,11 +22,20 @@ async def submit_contact_form(form: ContactForm):
     smtp_port = int(os.getenv("SMTP_PORT", 465))
     target_emails = ["Kuraai.admin@gmail.com"]
 
+    from app.db.mongodb import get_db
+    from datetime import datetime
+    
+    db = get_db()
+    await db.contact_messages.insert_one({
+        "name": form.name,
+        "email": form.email,
+        "message": form.message,
+        "created_at": datetime.utcnow()
+    })
+
     if not smtp_email or not smtp_password:
-        logger.warning(f"Contact form submitted by {form.email}, but SMTP credentials are not configured.")
-        logger.info(f"Message content: {form.message}")
-        # We return success so the frontend UI works, but we log the warning for the user
-        return {"status": "success", "message": "Email logged (SMTP not configured)."}
+        logger.warning(f"Contact form submitted by {form.email}, saved to DB, but SMTP credentials are not configured.")
+        return {"status": "success", "message": "Email logged and saved to DB (SMTP not configured)."}
 
     msg = EmailMessage()
     msg['Subject'] = f"New Contact from {form.name} ({form.email})"

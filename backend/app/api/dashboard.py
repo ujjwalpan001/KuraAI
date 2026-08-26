@@ -1,7 +1,8 @@
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.api.auth import require_user
 from pydantic import BaseModel
 from app.db.mongodb import get_db
 from app.whatsapp.client import send_text_message
@@ -11,17 +12,27 @@ router = APIRouter()
 
 
 @router.get("/api/tenants")
-async def list_tenants():
+async def list_tenants(user: dict = Depends(require_user)):
     db = get_db()
+    query = {}
+    if user.get("role") != "SUPER_ADMIN":
+        query["client_id"] = user["user_id"]
+        
     tenants = await db.tenants.find(
-        {}, {"_id": 0}
+        query, {"_id": 0}
     ).to_list(None)
     return {"tenants": tenants}
 
 
 @router.get("/api/tenants/{tenant_id}/sessions")
-async def list_sessions(tenant_id: str):
+async def list_sessions(tenant_id: str, user: dict = Depends(require_user)):
     db = get_db()
+    
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized to access this tenant")
+            
     sessions = await db.chat_sessions.find(
         {"tenant_id": tenant_id}, {"_id": 0}
     ).sort("last_message_at", -1).to_list(None)
@@ -36,8 +47,18 @@ async def list_sessions(tenant_id: str):
 
 
 @router.get("/api/sessions/{session_id}/messages")
-async def list_messages(session_id: str):
+async def list_messages(session_id: str, user: dict = Depends(require_user)):
     db = get_db()
+    
+    session = await db.chat_sessions.find_one({"session_id": session_id})
+    if not session:
+        raise HTTPException(404, "Session not found")
+        
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": session["tenant_id"]})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized to access this session")
+            
     messages = await db.message_audit_log.find(
         {"session_id": session_id}, {"_id": 0}
     ).sort("timestamp", 1).to_list(None)
@@ -50,8 +71,14 @@ async def list_messages(session_id: str):
 
 
 @router.get("/api/tenants/{tenant_id}/stats")
-async def tenant_stats(tenant_id: str):
+async def tenant_stats(tenant_id: str, user: dict = Depends(require_user)):
     db = get_db()
+    
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized to access this tenant")
+            
     total = await db.chat_sessions.count_documents({"tenant_id": tenant_id})
     resolved = await db.chat_sessions.count_documents({"tenant_id": tenant_id, "status": "RESOLVED"})
     needs_human = await db.chat_sessions.count_documents({"tenant_id": tenant_id, "status": "NEEDS_HUMAN"})
