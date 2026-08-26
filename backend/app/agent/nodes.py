@@ -213,21 +213,22 @@ async def _handle_inbound_pdf(state: AgentState, db, pdf_bytes: bytes) -> None:
 
     source_name = state.get("inbound_media_filename") or f"customer_{state['whatsapp_message_id']}.pdf"
 
-    # Persist to Cloudinary so the dashboard shows the file the customer sent.
+    # Persist to GridFS so the dashboard shows the file the customer sent.
+    # We use GridFS for PDFs instead of Cloudinary because Cloudinary restricts PDF delivery on new free accounts.
     try:
-        import cloudinary.uploader
-        upload_result = cloudinary.uploader.upload(
-            pdf_bytes, 
-            folder=f"whatsagent/{state['tenant_id']}/chats", 
-            public_id=source_name,
-            resource_type="raw"
+        from app.storage import gridfs
+        file_id = await gridfs.upload_bytes(
+            data=pdf_bytes,
+            filename=source_name,
+            content_type="application/pdf",
+            metadata={"tenant_id": state['tenant_id'], "chat_id": state['whatsapp_message_id']}
         )
-        stored_url = upload_result.get("secure_url")
+        stored_url = gridfs.public_url(file_id, source_name)
         await db.message_audit_log.update_one(
             {"whatsapp_message_id": state["whatsapp_message_id"], "direction": "INBOUND"},
             {"$set": {"media_url": stored_url, "media_type": "DOCUMENT"}},
         )
-        logger.info(f"[INBOUND PDF] stored to Cloudinary -> {stored_url}")
+        logger.info(f"[INBOUND PDF] stored to GridFS -> {stored_url}")
     except Exception as e:
         logger.warning(f"Failed to persist inbound PDF: {e}")
 

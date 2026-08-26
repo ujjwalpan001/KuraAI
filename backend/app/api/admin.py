@@ -212,17 +212,27 @@ async def admin_add_media(
 
     # Upload to Cloudinary
     is_pdf = file.filename and file.filename.lower().endswith(".pdf")
-    res_type = "raw" if is_pdf else "auto"
-    # For raw files, Cloudinary needs the extension in the public_id to serve the correct content-type
-    safe_name = file.filename if is_pdf else (file.filename.rsplit('.', 1)[0] if file.filename else "upload")
     
-    upload_result = cloudinary.uploader.upload(
-        data, 
-        folder=f"whatsagent/{tenant_id}/media", 
-        public_id=safe_name,
-        resource_type=res_type
-    )
-    url = upload_result.get("secure_url")
+    if is_pdf:
+        # Cloudinary restricts PDF delivery on new free accounts, so we use MongoDB GridFS (Cloud) for PDFs
+        from app.storage import gridfs
+        file_id = await gridfs.upload_bytes(
+            data=data,
+            filename=file.filename,
+            content_type=file.content_type or "application/pdf",
+            metadata={"tenant_id": tenant_id}
+        )
+        url = gridfs.public_url(file_id, file.filename)
+    else:
+        # Images use Cloudinary for CDN speed
+        safe_name = file.filename.rsplit('.', 1)[0] if file.filename else "upload"
+        upload_result = cloudinary.uploader.upload(
+            data, 
+            folder=f"whatsagent/{tenant_id}/media", 
+            public_id=safe_name,
+            resource_type="auto"
+        )
+        url = upload_result.get("secure_url")
     await db.tenants.update_one(
         {"tenant_id": tenant_id}, {"$set": {f"media_library.{keyword.lower()}": url}}
     )
