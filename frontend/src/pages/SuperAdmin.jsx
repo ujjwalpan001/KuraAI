@@ -10,6 +10,7 @@ export default function SuperAdmin({ user, activeTab }) {
   const [videoUrl, setVideoUrl] = useState("");
   const [demoVideoUrl, setDemoVideoUrl] = useState("");
   const [messages, setMessages] = useState([]);
+  const [globalSettings, setGlobalSettings] = useState({ master_system_prompt: "" });
   const [loading, setLoading] = useState(true);
   
   // UI State
@@ -33,6 +34,9 @@ export default function SuperAdmin({ user, activeTab }) {
       const settingsRes = await api.saGetSettings();
       setVideoUrl(settingsRes.settings?.hero_video_url || "");
       setDemoVideoUrl(settingsRes.settings?.demo_video_url || "");
+      
+      const globalRes = await api.getGlobalSettings();
+      setGlobalSettings(globalRes || { master_system_prompt: "" });
       
       if (activeTab === "settings") {
         const msgRes = await api.saGetMessages();
@@ -574,10 +578,31 @@ export default function SuperAdmin({ user, activeTab }) {
               <ShieldAlert size={12}/> Changes reflect instantly on the public landing page without redeploying code.
             </p>
               
-            <div className="pt-6 mt-6 border-t border-white/5">
-              <button onClick={handleSaveVideo} className="flex items-center gap-2 px-6 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-xl text-[14px] font-bold tracking-wide hover:bg-blue-500 hover:text-white transition-all shadow-lg hover:shadow-blue-500/20">
-                <Save size={16} /> PUBLISH SETTINGS
+            <div className="mt-6 flex justify-end">
+              <button onClick={handleSaveVideo} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[13px] font-bold rounded-xl shadow-lg shadow-blue-900/50 transition-all active:scale-95">
+                <Save size={16} /> SAVE MEDIA CONFIG
               </button>
+            </div>
+            
+            <div className="mt-12 border-t border-white/5 pt-8">
+              <h3 className="text-[15px] font-bold text-white flex items-center gap-2 mb-4">
+                <Bot size={16} className="text-brand" /> Global System Prompt
+              </h3>
+              <p className="text-[13px] text-white/60 mb-4">
+                This is the master prompt applied to ALL tenants (unless they enable Exclusive Prompt Mode). Use this to enforce platform-wide safety, language rules, or escalation policies.
+              </p>
+              <textarea 
+                rows={8}
+                value={globalSettings.master_system_prompt || ""}
+                onChange={(e) => setGlobalSettings({...globalSettings, master_system_prompt: e.target.value})}
+                className="w-full px-4 py-3 bg-black/50 border border-white/10 rounded-xl text-[13px] text-white focus:border-brand focus:ring-1 focus:ring-brand outline-none font-mono transition-all resize-y shadow-inner"
+                placeholder="IMPORTANT: If the user uses frustrated language..."
+              />
+              <div className="mt-4 flex justify-end">
+                <button onClick={handleSaveGlobalSettings} className="flex items-center gap-2 px-6 py-2.5 bg-brand hover:bg-brand/80 text-white text-[13px] font-bold rounded-xl shadow-lg transition-all active:scale-95">
+                  <Save size={16} /> SAVE GLOBAL PROMPT
+                </button>
+              </div>
             </div>
           </div>
 

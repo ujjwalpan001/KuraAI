@@ -178,6 +178,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
         personal_numbers: activeObj.personal_numbers || [],
         rate_limit_per_minute: activeObj.rate_limit_per_minute ?? 25,
         exclusive_prompt_mode: activeObj.exclusive_prompt_mode || false,
+        exclusive_prompt: activeObj.exclusive_prompt || "",
       }));
     }
   }, [activeObj]);
@@ -363,14 +364,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                   Define the AI's personality, boundaries, and specific rules for this tenant. The engine will automatically append RAG context and catalog data below this prompt.
                 </p>
                 <div>
-                  <textarea 
-                    rows={12} 
-                    value={formData.system_prompt || ""}
-                    onChange={e => setFormData({...formData, system_prompt: e.target.value})}
-                    className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y"
-                    placeholder="You are a helpful assistant..."
-                  />
-                  <div className="mt-4 flex items-center gap-3 bg-canvas p-4 rounded-lg border border-hair">
+                  <div className="mb-4 flex items-center gap-3 bg-canvas p-4 rounded-lg border border-hair">
                     <input 
                       type="checkbox" 
                       id="exclusiveMode"
@@ -379,10 +373,34 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                       className="w-4 h-4 accent-brand rounded border-hair cursor-pointer"
                     />
                     <div>
-                      <label htmlFor="exclusiveMode" className="text-[13px] font-semibold text-ink block cursor-pointer">Exclusive Prompt Mode</label>
-                      <p className="text-[12px] text-muted mt-1">If enabled, the AI will ONLY follow the prompt above. It will completely ignore all global superadmin rules (like human escalation and language rules).</p>
+                      <label htmlFor="exclusiveMode" className="text-[13px] font-semibold text-ink block cursor-pointer">Exclusive Prompt Mode (Auto-Reply)</label>
+                      <p className="text-[12px] text-muted mt-1">If enabled, the AI completely ignores global rules and only follows the strict instructions below (great for 'Out of Office' auto-replies).</p>
                     </div>
                   </div>
+
+                  {formData.exclusive_prompt_mode ? (
+                    <div>
+                      <label className="text-[12px] font-semibold text-brand mb-2 block">Exclusive Prompt</label>
+                      <textarea 
+                        rows={8} 
+                        value={formData.exclusive_prompt || ""}
+                        onChange={e => setFormData({...formData, exclusive_prompt: e.target.value})}
+                        className="w-full px-4 py-3 bg-canvas border border-brand/50 rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y ring-1 ring-brand/10"
+                        placeholder="e.g. Just reply 'We will be back soon' for everything. Do not reply anything else."
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[12px] font-semibold text-muted mb-2 block">Standard System Prompt</label>
+                      <textarea 
+                        rows={12} 
+                        value={formData.system_prompt || ""}
+                        onChange={e => setFormData({...formData, system_prompt: e.target.value})}
+                        className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y"
+                        placeholder="You are a helpful assistant..."
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -139,6 +139,9 @@ async def context_retriever_node(state: AgentState) -> AgentState:
         state["error"] = f"Tenant {state['tenant_id']} not found"
         return state
     state["tenant_config"] = tenant
+    
+    # Global settings
+    state["global_settings"] = await db.global_settings.find_one({"_id": "main"}) or {}
 
     # Catalog inventory (names) so the bot is HONEST about what actually exists
     cat = await db.catalog_items.find(
@@ -312,7 +315,7 @@ async def _handle_inbound_image(state: AgentState, db, img_bytes: bytes) -> None
 # Node 3: LLM Reasoning
 # ---------------------------------------------------------------------------
 
-def _build_system_prompt(tenant: dict, catalog_names: list | None = None) -> str:
+def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: list | None = None) -> str:
     prompt = ""
 
     # Tell the LLM what's in the catalog so it's HONEST about what exists
@@ -350,12 +353,16 @@ def _build_system_prompt(tenant: dict, catalog_names: list | None = None) -> str
         )
 
     if not tenant.get("exclusive_prompt_mode"):
-        prompt += (
-            "IMPORTANT: If the user uses frustrated language, complains, or exhibits a negative sentiment, "
-            "you MUST immediately trigger the escalate_to_human tool so a live agent can take over.\n"
-            "CRITICAL LANGUAGE RULE: If the user writes in Hindi or Nepali using English letters (e.g., Roman Hindi / Roman Nepali / Hinglish), "
-            "you MUST reply in the exact same Roman script (Hinglish/Roman Nepali). Match their transliterated style exactly.\n\n"
-        )
+        master_prompt = global_settings.get("master_system_prompt", "").strip()
+        if not master_prompt:
+            # Fallback if superadmin hasn't configured it yet
+            master_prompt = (
+                "IMPORTANT: If the user uses frustrated language, complains, or exhibits a negative sentiment, "
+                "you MUST immediately trigger the escalate_to_human tool so a live agent can take over.\n"
+                "CRITICAL LANGUAGE RULE: If the user writes in Hindi or Nepali using English letters (e.g., Roman Hindi / Roman Nepali / Hinglish), "
+                "you MUST reply in the exact same Roman script (Hinglish/Roman Nepali). Match their transliterated style exactly.\n"
+            )
+        prompt += f"{master_prompt}\n\n"
 
     name = tenant.get("name", "this business")
     identity = (
@@ -364,7 +371,12 @@ def _build_system_prompt(tenant: dict, catalog_names: list | None = None) -> str
         f"You are exclusively an assistant for {name}.\n"
     )
 
-    base = (tenant.get("system_prompt") or "").strip()
+    # Select the base prompt based on mode
+    if tenant.get("exclusive_prompt_mode"):
+        base = (tenant.get("exclusive_prompt") or "").strip()
+    else:
+        base = (tenant.get("system_prompt") or "").strip()
+        
     if not base:
         base = (
             "Be friendly, concise, and professional. "
@@ -441,7 +453,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
         return state
 
     tenant = state["tenant_config"]
-    system_prompt = _build_system_prompt(tenant, state.get("catalog_names"))
+    system_prompt = _build_system_prompt(tenant, state.get("global_settings", {}), state.get("catalog_names"))
 
     # Build OpenAI-style message list: system + last-5 history + current
     messages = [{"role": "system", "content": system_prompt}]

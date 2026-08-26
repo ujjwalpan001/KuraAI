@@ -215,3 +215,27 @@ async def get_messages():
     db = get_db()
     messages = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(None)
     return {"messages": messages}
+
+# ── Global Settings (CMS) ──────────────────────────────────────────────────────────
+
+class GlobalSettingsIn(BaseModel):
+    master_system_prompt: str
+
+@router.get("/settings")
+async def get_global_settings():
+    db = get_db()
+    settings = await db.global_settings.find_one({"_id": "main"})
+    if not settings:
+        return {"master_system_prompt": ""}
+    settings.pop("_id", None)
+    return settings
+
+@router.put("/settings")
+async def update_global_settings(req: GlobalSettingsIn):
+    db = get_db()
+    await db.global_settings.update_one(
+        {"_id": "main"},
+        {"$set": {"master_system_prompt": req.master_system_prompt}},
+        upsert=True
+    )
+    return {"status": "ok"}

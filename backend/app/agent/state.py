@@ -20,6 +20,7 @@ class AgentState(TypedDict):
     chat_history: Optional[list]
     rag_chunks: Optional[list]
     catalog_names: Optional[list]         # full catalog inventory (names) for honesty
+    global_settings: Optional[dict]       # superadmin global CMS settings
 
     # LLM output (Node 3)
     llm_reply: Optional[str]

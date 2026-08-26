@@ -165,5 +165,9 @@ export const api = {
   saUpdateClientStatus: (id, status) => send(`/api/superadmin/clients/${id}/status?status=${status}`, "PUT", {}),
   saDeleteClient: (id) => send(`/api/superadmin/clients/${id}`, "DELETE"),
   saGetMessages: () => get("/api/superadmin/messages"),
-  saUpdateTenantLimits: (id, limits) => send(`/api/superadmin/tenants/${id}/limits`, "PUT", limits)
+  saUpdateTenantLimits: (id, limits) => send(`/api/superadmin/tenants/${id}/limits`, "PUT", limits),
+  addAdmin: (data) => send("/api/superadmin/admins", "POST", data),
+  removeAdmin: (username) => send(`/api/superadmin/admins/${username}`, "DELETE"),
+  getGlobalSettings: () => get("/api/superadmin/settings"),
+  updateGlobalSettings: (data) => send("/api/superadmin/settings", "PUT", data)
 };
