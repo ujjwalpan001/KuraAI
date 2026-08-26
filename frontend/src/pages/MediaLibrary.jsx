@@ -129,7 +129,7 @@ function NewEntryForm({ tenantId, onSaved, onCancel }) {
 // Main MediaLibrary component
 // ---------------------------------------------------------------------------
 export default function MediaLibrary({ tenantId }) {
-  const [activeTab, setActiveTab] = useState("media");
+  const [activeTab, setActiveTab] = useState("images");
   const [media, setMedia] = useState({});
   const [knowledgeDocs, setKnowledgeDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -227,8 +227,8 @@ export default function MediaLibrary({ tenantId }) {
           <p className="text-[14px] text-muted mt-1">Manage files, images, and text knowledge for your AI agent.</p>
         </div>
         <div className="flex items-center gap-2">
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.jpeg,.png" multiple />
-          {activeTab === "media" && (
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={activeTab === "images" ? ".jpg,.jpeg,.png" : ".pdf"} multiple />
+          {(activeTab === "images" || activeTab === "documents") && (
             <button onClick={handleUploadClick} disabled={uploading}
               className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-[13px] font-medium shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:bg-brand-deep transition-colors disabled:opacity-50">
               <Upload size={15} /> {uploading ? "Uploading..." : "Upload Asset"}
@@ -245,9 +245,13 @@ export default function MediaLibrary({ tenantId }) {
 
       {/* Tab switcher */}
       <div className="flex gap-1 mb-6 shrink-0 bg-surface border border-hair rounded-xl p-1 self-start">
-        <button onClick={() => setActiveTab("media")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${activeTab === "media" ? "bg-brand text-white shadow-sm" : "text-muted hover:text-ink"}`}>
-          <Folder size={14} /> Media Files
+        <button onClick={() => setActiveTab("images")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${activeTab === "images" ? "bg-brand text-white shadow-sm" : "text-muted hover:text-ink"}`}>
+          <Image size={14} /> Images
+        </button>
+        <button onClick={() => setActiveTab("documents")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${activeTab === "documents" ? "bg-brand text-white shadow-sm" : "text-muted hover:text-ink"}`}>
+          <FileText size={14} /> Documents
         </button>
         <button onClick={() => setActiveTab("knowledge")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${activeTab === "knowledge" ? "bg-brand text-white shadow-sm" : "text-muted hover:text-ink"}`}>
@@ -261,7 +265,7 @@ export default function MediaLibrary({ tenantId }) {
       {/* ------------------------------------------------------------------ */}
       {/* MEDIA TAB                                                           */}
       {/* ------------------------------------------------------------------ */}
-      {activeTab === "media" && (
+      {(activeTab === "images" || activeTab === "documents") && (
         <div className="flex-1 flex flex-col bg-surface border border-hair rounded-xl overflow-hidden min-h-0">
           <div className="p-4 border-b border-hair flex items-center gap-3">
             <div className="relative flex-1 max-w-xs">
@@ -282,8 +286,8 @@ export default function MediaLibrary({ tenantId }) {
               </thead>
               <tbody className="divide-y divide-hair">
                 {loading && <tr><td colSpan="4" className="text-center py-8 text-muted text-[13px]">Loading...</td></tr>}
-                {!loading && mediaList.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-muted text-[13px]">No media files uploaded yet.</td></tr>}
-                {!loading && mediaList.map(file => (
+                {!loading && mediaList.filter(f => activeTab === 'images' ? !f.isPdf : f.isPdf).length === 0 && <tr><td colSpan="4" className="text-center py-8 text-muted text-[13px]">No {activeTab} uploaded yet.</td></tr>}
+                {!loading && mediaList.filter(f => activeTab === 'images' ? !f.isPdf : f.isPdf).map(file => (
                   <tr key={file.keyword} className="hover:bg-canvas/50 transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
