@@ -10,7 +10,7 @@ from app.agent.state import AgentState
 from app.agent.tools import TOOLS
 from app.config import settings
 from app.db.mongodb import get_db
-from app.rag.chroma_client import search_knowledge_base, search_catalog, ensure_index_ready
+from app.rag.qdrant_client import search_knowledge_base, search_catalog, ensure_index_ready
 from app.storage import gridfs
 from app.whatsapp import client as wa
 
@@ -216,18 +216,20 @@ async def _handle_inbound_pdf(state: AgentState, db, pdf_bytes: bytes) -> None:
 
     source_name = state.get("inbound_media_filename") or f"customer_{state['whatsapp_message_id']}.pdf"
 
-    # Persist to GridFS so the dashboard shows the file the customer sent.
+    # Persist to Cloudinary so the dashboard shows the file the customer sent.
     try:
-        stored_id = await gridfs.upload_bytes(
-            data=pdf_bytes, filename=source_name, content_type="application/pdf",
-            metadata={"tenant_id": state["tenant_id"], "direction": "INBOUND"},
+        import cloudinary.uploader
+        upload_result = cloudinary.uploader.upload(
+            pdf_bytes, 
+            folder=f"whatsagent/{state['tenant_id']}/chats", 
+            resource_type="auto"
         )
-        stored_url = gridfs.public_url(stored_id, source_name)
+        stored_url = upload_result.get("secure_url")
         await db.message_audit_log.update_one(
             {"whatsapp_message_id": state["whatsapp_message_id"], "direction": "INBOUND"},
             {"$set": {"media_url": stored_url, "media_type": "DOCUMENT"}},
         )
-        logger.info(f"[INBOUND PDF] stored to GridFS -> {stored_url}")
+        logger.info(f"[INBOUND PDF] stored to Cloudinary -> {stored_url}")
     except Exception as e:
         logger.warning(f"Failed to persist inbound PDF: {e}")
 
@@ -256,21 +258,20 @@ async def _handle_inbound_pdf(state: AgentState, db, pdf_bytes: bytes) -> None:
 
 async def _handle_inbound_image(state: AgentState, db, img_bytes: bytes) -> None:
     """A customer sent an image. Persist it and describe it with Gemini Vision (bonus B2)."""
-    # Persist the customer-sent image to GridFS so the dashboard can show it.
-    # (Meta's media URL expires in ~5 min, so we must store it ourselves.)
+    # Persist the customer-sent image to Cloudinary so the dashboard can show it.
     try:
-        stored_id = await gridfs.upload_bytes(
-            data=img_bytes,
-            filename=f"inbound_{state['whatsapp_message_id']}.jpg",
-            content_type="image/jpeg",
-            metadata={"tenant_id": state["tenant_id"], "direction": "INBOUND"},
+        import cloudinary.uploader
+        upload_result = cloudinary.uploader.upload(
+            img_bytes, 
+            folder=f"whatsagent/{state['tenant_id']}/chats", 
+            resource_type="image"
         )
-        stored_url = gridfs.public_url(stored_id)
+        stored_url = upload_result.get("secure_url")
         await db.message_audit_log.update_one(
             {"whatsapp_message_id": state["whatsapp_message_id"], "direction": "INBOUND"},
             {"$set": {"media_url": stored_url, "media_type": "IMAGE"}},
         )
-        logger.info(f"[INBOUND IMAGE] stored to GridFS -> {stored_url}")
+        logger.info(f"[INBOUND IMAGE] stored to Cloudinary -> {stored_url}")
     except Exception as e:
         logger.warning(f"Failed to persist inbound image: {e}")
 

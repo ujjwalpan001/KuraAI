@@ -264,13 +264,19 @@ async def _fetch_and_store_media(message_data: dict, tenant_id: str, direction: 
         else:
             content_type = mime or "application/octet-stream"
             
-        stored_id = await gridfs.upload_bytes(
-            data=media_bytes,
-            filename=fname,
-            content_type=content_type,
-            metadata={"tenant_id": tenant_id, "direction": direction},
+        import cloudinary
+        import cloudinary.uploader
+        from app.config import settings
+        
+        if settings.cloudinary_url:
+            cloudinary.config()
+
+        upload_result = cloudinary.uploader.upload(
+            media_bytes, 
+            folder=f"whatsagent/{tenant_id}/chats", 
+            resource_type="auto"
         )
-        stored_url = gridfs.public_url(stored_id)
+        stored_url = upload_result.get("secure_url")
         
         # Update the audit log
         await db.message_audit_log.update_one(
@@ -356,24 +362,36 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     customer_phone = message_data["customer_phone"]
 
     # -----------------------------------------------------------------------
-    # ENTERPRISE RATE LIMITING (Fast sliding window)
+    # ENTERPRISE RATE LIMITING (Redis or In-Memory)
     # -----------------------------------------------------------------------
     if not from_me:
-        now = time.time()
-        # Clean up timestamps outside the window for this customer
-        _rate_limit_cache[customer_phone] = [t for t in _rate_limit_cache[customer_phone] if now - t < RATE_LIMIT_WINDOW]
-        
-        # Check if they hit the limit
-        if len(_rate_limit_cache[customer_phone]) >= RATE_LIMIT_MAX:
-            logger.warning(f"[RATE LIMIT] {customer_phone} exceeded limit (>{RATE_LIMIT_MAX} msgs/min) — dropping spam")
-            return Response(status_code=200)
+        if settings.redis_url:
+            import redis
+            import time
+            try:
+                r = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+                key = f"rate_limit:{customer_phone}"
+                now = time.time()
+                # Redis sliding window
+                r.zadd(key, {str(now): now})
+                r.zremrangebyscore(key, 0, now - RATE_LIMIT_WINDOW)
+                count = r.zcard(key)
+                r.expire(key, RATE_LIMIT_WINDOW)
+                if count > RATE_LIMIT_MAX:
+                    logger.warning(f"[RATE LIMIT] {customer_phone} exceeded limit (>{RATE_LIMIT_MAX} msgs/min) — dropping spam")
+                    return Response(status_code=200)
+            except Exception as e:
+                logger.error(f"Redis rate limiting failed: {e}")
+        else:
+            now = time.time()
+            _rate_limit_cache[customer_phone] = [t for t in _rate_limit_cache[customer_phone] if now - t < RATE_LIMIT_WINDOW]
+            if len(_rate_limit_cache[customer_phone]) >= RATE_LIMIT_MAX:
+                logger.warning(f"[RATE LIMIT] {customer_phone} exceeded limit (>{RATE_LIMIT_MAX} msgs/min) — dropping spam")
+                return Response(status_code=200)
+            _rate_limit_cache[customer_phone].append(now)
             
-        # Add current message timestamp
-        _rate_limit_cache[customer_phone].append(now)
-        
-        # Memory leak protection: if dictionary grows past 20,000 active phones, wipe it
-        if len(_rate_limit_cache) > 20000:
-            _rate_limit_cache.clear()
+            if len(_rate_limit_cache) > 20000:
+                _rate_limit_cache.clear()
 
     # -----------------------------------------------------------------------
     # RESOLVE TENANT — simple 1:1: instance → tenant

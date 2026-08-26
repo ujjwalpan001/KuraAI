@@ -16,7 +16,7 @@ from app.config import settings
 from app.db.mongodb import get_db
 from app.api.auth import require_user
 from app.storage import gridfs
-from app.rag.chroma_client import build_chroma_index, index_upsert, index_remove, catalog_doc_text
+from app.rag.qdrant_client import build_chroma_index, index_upsert, index_remove, catalog_doc_text
 from app.whatsapp import client as wa_client
 
 router = APIRouter(prefix="/api/admin")
@@ -203,11 +203,20 @@ async def admin_add_media(
         raise HTTPException(404, "Tenant not found")
     data = await file.read()
     _check_upload_size(data, file.filename)
-    file_id = await gridfs.upload_bytes(
-        data, file.filename, file.content_type or "application/octet-stream",
-        {"tenant_id": tenant_id, "keyword": keyword},
+    import cloudinary
+    import cloudinary.uploader
+
+    # Set cloudinary configuration from environment variable
+    if settings.cloudinary_url:
+        cloudinary.config()  # automatically parses CLOUDINARY_URL from env
+
+    # Upload to Cloudinary
+    upload_result = cloudinary.uploader.upload(
+        data, 
+        folder=f"whatsagent/{tenant_id}/media", 
+        resource_type="auto"
     )
-    url = gridfs.public_url(file_id, file.filename)
+    url = upload_result.get("secure_url")
     await db.tenants.update_one(
         {"tenant_id": tenant_id}, {"$set": {f"media_library.{keyword.lower()}": url}}
     )
@@ -235,7 +244,28 @@ async def admin_remove_media(tenant_id: str, keyword: str):
     others = [k for k, u in (tenant or {}).get("media_library", {}).items()
               if u == url and k != keyword.lower()]
     if url and not others:
-        await _delete_gridfs_if_owned(url)
+        if "cloudinary.com" in url:
+            try:
+                import cloudinary
+                import cloudinary.uploader
+                if settings.cloudinary_url:
+                    cloudinary.config()
+                
+                # Extract public_id from cloudinary url
+                # Example: https://res.cloudinary.com/.../image/upload/v1234/folder/filename.jpg
+                # We need folder/filename
+                parts = url.split("/upload/")
+                if len(parts) == 2:
+                    # Remove version if present and extension
+                    path = parts[1]
+                    if path.startswith("v") and "/" in path:
+                        path = path.split("/", 1)[1]
+                    public_id = path.rsplit(".", 1)[0]
+                    cloudinary.uploader.destroy(public_id)
+            except Exception as e:
+                logger.warning(f"Failed to delete from Cloudinary: {e}")
+        else:
+            await _delete_gridfs_if_owned(url)
     await db.tenants.update_one(
         {"tenant_id": tenant_id}, {"$unset": {f"media_library.{keyword.lower()}": ""}}
     )
@@ -281,11 +311,17 @@ async def admin_add_catalog_item(
             "or 'Import a catalog PDF' to auto-extract product images.",
         )
     data = await file.read()
-    file_id = await gridfs.upload_bytes(
-        data, file.filename, file.content_type or "image/jpeg",
-        {"tenant_id": tenant_id, "catalog": name},
+    import cloudinary
+    import cloudinary.uploader
+    if settings.cloudinary_url:
+        cloudinary.config()
+
+    upload_result = cloudinary.uploader.upload(
+        data, 
+        folder=f"whatsagent/{tenant_id}/catalog", 
+        resource_type="image"
     )
-    image_url = gridfs.public_url(file_id, file.filename)
+    image_url = upload_result.get("secure_url")
 
     ai_description = description
     if auto_describe and not description:

@@ -17,7 +17,7 @@ import fitz  # PyMuPDF
 from app.config import settings
 from app.db.mongodb import get_db
 from app.storage import gridfs
-from app.rag.chroma_client import build_chroma_index, index_upsert, catalog_doc_text
+from app.rag.qdrant_client import build_chroma_index, index_upsert, catalog_doc_text
 
 logger = logging.getLogger(__name__)
 
@@ -194,21 +194,18 @@ async def ingest_text_pdf(tenant_id: str, pdf_bytes: bytes, source_name: str, re
 
 async def ingest_pdf_full(tenant_id: str, pdf_bytes: bytes, source_name: str, job_id: str | None = None) -> dict:
     """
-    One upload, BOTH layers integrated:
-      • product IMAGES  -> searchable catalog items (so the bot can SHOW them)
-      • page TEXT       -> knowledge chunks (so the bot can ANSWER about the contents)
-    Rebuilds the RAG index once at the end.
+    One upload, TEXT layer ONLY (as requested):
+      • page TEXT -> knowledge chunks (so the bot can ANSWER about the contents)
+    Ignores product images inside the PDF.
     """
-    # Each step upserts its own new vectors incrementally (no slow full rebuild).
-    cat = await ingest_catalog_pdf(tenant_id, pdf_bytes, source_name, rebuild=True, job_id=job_id)
     await _set_job(job_id, phase="text")
     txt = await ingest_text_pdf(tenant_id, pdf_bytes, source_name, rebuild=True, job_id=job_id)
     await _set_job(job_id, status="done", phase="done")
     return {
-        "images_found": cat.get("images_found", 0),
-        "items_created": cat.get("items_created", 0),
+        "images_found": 0,
+        "items_created": 0,
         "text_chunks": txt.get("text_chunks", 0),
-        "note": cat.get("note", "") or txt.get("note", ""),
+        "note": txt.get("note", ""),
     }
 
 

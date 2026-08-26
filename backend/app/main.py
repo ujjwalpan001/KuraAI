@@ -15,21 +15,10 @@ from app.api.contact import router as contact_router
 from app.db.mongodb import connect_mongodb, close_mongodb
 from app.db.seed import seed_tenants_if_empty, seed_admin_if_empty
 from app.db.seed_catalog import seed_catalog_if_empty
-from app.rag.chroma_client import ensure_index_ready
 from app.rag.seed_knowledge import seed_knowledge_if_empty
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-async def _build_index_bg():
-    """Build the RAG index after startup so it never blocks the port/health check."""
-    try:
-        await ensure_index_ready()
-        logger.info("RAG index ready.")
-    except Exception as e:
-        logger.error(f"RAG index build failed (bot still serves, RAG degraded): {e}")
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,9 +29,7 @@ async def lifespan(app: FastAPI):
     await seed_tenants_if_empty()
     await seed_knowledge_if_empty()
     await seed_catalog_if_empty()
-    # Build the (heavier) Chroma index in the BACKGROUND — non-blocking.
-    asyncio.create_task(_build_index_bg())
-    logger.info("Core ready; RAG index building in background.")
+    logger.info("Core ready; using persistent Qdrant cloud.")
     yield
     # Shutdown
     await close_mongodb()

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     admin_password: str = ""
     google_client_id: str = ""
 
+    # Cloud Services
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
+    cloudinary_url: str = ""
+    redis_url: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = False
