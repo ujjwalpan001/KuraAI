@@ -10,9 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download ChromaDB's ONNX MiniLM embedding model at build time
-# so the first request isn't slowed by a download.
-RUN python -c "from chromadb.utils import embedding_functions; embedding_functions.DefaultEmbeddingFunction()(['warmup'])"
 
 COPY . .
 
