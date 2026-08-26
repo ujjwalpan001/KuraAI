@@ -20,8 +20,7 @@ async def submit_contact_form(form: ContactForm):
     smtp_password = os.getenv("SMTP_PASSWORD")
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", 465))
-    
-    target_emails = ["ujjawalpandey1234@gmail.com", "kanchanyadav00111@gmail.com"]
+    target_emails = ["Kuraai.admin@gmail.com"]
 
     if not smtp_email or not smtp_password:
         logger.warning(f"Contact form submitted by {form.email}, but SMTP credentials are not configured.")

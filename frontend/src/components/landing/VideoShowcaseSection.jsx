@@ -20,10 +20,10 @@ export default function VideoShowcaseSection() {
               <Settings className="w-6 h-6 text-white/80" />
             </div>
             <h2 className="text-4xl md:text-5xl font-display font-bold text-white mb-6 leading-[1.1] tracking-tight">
-              Build, test, and deploy in minutes.
+              Never miss a customer again.
             </h2>
             <p className="text-lg text-white/50 leading-relaxed">
-              Configure everything from voice and conversation flow, to telephony and integrations. Kura handles the infrastructure so you can go from prompt to production fast.
+              Kura replies to every WhatsApp message instantly, keeps conversations flowing around the clock, and brings your team in exactly when it matters.
             </p>
           </motion.div>
 
@@ -81,10 +81,10 @@ export default function VideoShowcaseSection() {
               <Activity className="w-6 h-6 text-white/80" />
             </div>
             <h2 className="text-4xl md:text-5xl font-display font-bold text-white mb-6 leading-[1.1] tracking-tight">
-              Ship better agents.<br />Faster. Every time.
+              Smarter replies, Happier customers.
             </h2>
             <p className="text-lg text-white/50 leading-relaxed">
-              Track what's working across every interaction, surface what isn't, and continuously improve the experiences that drive your business forward.
+              Kura understands context, not just keywords, so every response feels human, helpful, and fast turning quick replies into lasting loyalty.
             </p>
           </motion.div>
         </div>

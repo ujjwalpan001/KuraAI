@@ -74,13 +74,11 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
         }`}
       >
         <div className="h-24 flex items-center px-6 mb-2">
-          <div className="flex items-center gap-3 text-white font-bold text-xl tracking-wide">
-            <Bot size={28} className="text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]" />
-            {sidebarOpen && (
-              <div className="flex flex-col">
-                <span className="font-display font-bold text-[18px] tracking-tight text-white">WhatsAgent</span>
-                <span className="text-[10px] text-indigo-400 font-semibold tracking-widest uppercase mt-0.5">Enterprise</span>
-              </div>
+          <div className="flex items-center text-white font-bold text-xl tracking-wide">
+            {sidebarOpen ? (
+              <img src="/kura.png" alt="Logo" className="h-16 w-auto object-contain" />
+            ) : (
+              <img src="/kura.png" alt="Logo" className="h-10 w-auto object-contain" />
             )}
           </div>
         </div>

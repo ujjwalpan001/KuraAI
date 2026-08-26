@@ -2,6 +2,8 @@ from app.db.mongodb import get_db
 from app.db.models import TenantModel
 from app.config import settings
 from datetime import datetime
+import time
+from app.api.auth import _hash_password
 
 
 TENANT_A = {
@@ -100,6 +102,8 @@ async def ensure_indexes() -> None:
 
     await db.knowledge_docs.create_index("tenant_id")
     await db.knowledge_docs.create_index("doc_type")
+    
+    await db.users.create_index("email", unique=True)
 
     # Idempotency: unique index so a given inbound WhatsApp message is processed once.
     await db.processed_webhooks.create_index("whatsapp_message_id", unique=True)
@@ -124,3 +128,24 @@ async def seed_tenants_if_empty() -> None:
                 {"tenant_id": tid, "switch_code": {"$exists": False}},
                 {"$set": {"switch_code": code}},
             )
+
+
+async def seed_admin_if_empty() -> None:
+    db = get_db()
+    users_to_seed = [
+        {"email": "uzwalpandey1234@gmail.com", "pass": "Ujjawal@9804", "name": "Ujjawal Pandey"},
+        {"email": "kanchanyadav050111@gmail.com", "pass": "Kanchan@050111", "name": "Kanchan Yadav"}
+    ]
+    for u in users_to_seed:
+        existing = await db.users.find_one({"email": u["email"]})
+        if not existing:
+            user_id = f"user_{int(time.time())}_{u['email'].split('@')[0]}"
+            await db.users.insert_one({
+                "user_id": user_id,
+                "name": u["name"],
+                "email": u["email"],
+                "password_hash": _hash_password(u["pass"]),
+                "created_at": datetime.utcnow(),
+            })
+            print(f"Seeded admin user: {u['email']}")
+

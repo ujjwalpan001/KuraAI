@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { login, signup, googleLogin } from "../api/client";
+import { login } from "../api/client";
 import { Bot, Eye, EyeOff, Zap, ShieldCheck, LineChart } from "lucide-react";
-import { GoogleLogin } from '@react-oauth/google';
 
 /* ────────────────────────────────────────────────────────────
    Kura — Re-designed Dark Theme with Carousel
@@ -18,7 +17,6 @@ const CAROUSEL_SLIDES = [
 ];
 
 export default function Login({ onSuccess, onBack }) {
-  const [mode, setMode] = useState("login");
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
@@ -29,7 +27,7 @@ export default function Login({ onSuccess, onBack }) {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#24242F] font-sans text-white p-4 sm:p-6 lg:p-8" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen flex items-center justify-center bg-black font-sans text-white p-4 sm:p-6 lg:p-8" style={{ fontFamily: "'Inter', sans-serif" }}>
       <style>{FONT_IMPORT}</style>
 
       <div className="w-full max-w-[1000px] h-auto lg:h-[720px] bg-[#1E1E26] rounded-[32px] shadow-2xl flex flex-col lg:flex-row p-3 gap-3 relative overflow-hidden">
@@ -51,7 +49,7 @@ export default function Login({ onSuccess, onBack }) {
             {/* Top Bar */}
             <div className="flex justify-between items-center">
               <div className="flex items-center">
-                <img src="/kura.png" alt="Logo" className="h-12 w-auto object-contain" />
+                <img src="/kura.png" alt="Logo" className="h-16 w-auto object-contain" />
               </div>
               {onBack && (
                 <button onClick={onBack} className="flex items-center gap-1.5 text-[11px] font-medium bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full text-white transition-colors cursor-pointer">
@@ -109,13 +107,10 @@ export default function Login({ onSuccess, onBack }) {
         <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-10 relative overflow-y-auto">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center mb-10">
-             <img src="/kura.png" alt="Logo" className="h-12 w-auto object-contain" />
+             <img src="/kura.png" alt="Logo" className="h-24 w-auto object-contain" />
           </div>
-
           <div className="w-full max-w-[400px] mx-auto">
-            {mode === "login" 
-              ? <LoginForm onSwitch={() => setMode("signup")} onSuccess={onSuccess} /> 
-              : <SignupForm onSwitch={() => setMode("login")} onSuccess={onSuccess} />}
+            <LoginForm onSuccess={onSuccess} />
           </div>
         </div>
       </div>
@@ -124,7 +119,7 @@ export default function Login({ onSuccess, onBack }) {
 }
 
 /* ── Login form ── */
-function LoginForm({ onSwitch, onSuccess }) {
+function LoginForm({ onSuccess }) {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -169,7 +164,7 @@ function LoginForm({ onSwitch, onSuccess }) {
         <AuthField 
           type="email" 
           value={form.email} 
-          placeholder="admin@company.com"
+          placeholder="Email address"
           onChange={(v) => setForm({ ...form, email: v })} 
         />
         
@@ -177,7 +172,7 @@ function LoginForm({ onSwitch, onSuccess }) {
           <AuthField 
             type={showPassword ? "text" : "password"} 
             value={form.password} 
-            placeholder="••••••••"
+            placeholder="Password"
             onChange={(v) => setForm({ ...form, password: v })} 
           />
           <button 
@@ -200,152 +195,7 @@ function LoginForm({ onSwitch, onSuccess }) {
 
         <SubmitButton loading={loading} label="Sign in to Dashboard" />
 
-        <div className="mt-4 flex justify-center">
-          <GoogleLogin
-            onSuccess={async (credentialResponse) => {
-              try {
-                await googleLogin(credentialResponse.credential);
-                onSuccess();
-              } catch (err) {
-                setError(err.message);
-              }
-            }}
-            onError={() => {
-              setError("Google Sign-In failed");
-            }}
-            theme="filled_black"
-          />
-        </div>
       </form>
-
-      <div className="mt-6">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-[#1E1E26] text-[#6C6C7D]">New here?</span>
-          </div>
-        </div>
-        
-        <button 
-          type="button" 
-          onClick={onSwitch} 
-          className="w-full mt-6 py-3.5 rounded-xl font-medium text-[15px] bg-[#2A2A36] text-white hover:bg-[#343442] border border-white/10 transition-colors flex justify-center items-center gap-2"
-        >
-          Create a new account
-        </button>
-      </div>
-    </>
-  );
-}
-
-/* ── Signup form ── */
-function SignupForm({ onSwitch, onSuccess }) {
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.name.trim()) { setError("Please enter your name"); return; }
-    if (!form.email.trim()) { setError("Please enter your email"); return; }
-    if (form.password.length < 6) { setError("Password must be at least 6 characters"); return; }
-    setLoading(true); setError("");
-    try {
-      await signup(form.name, form.email, form.password);
-      onSuccess();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <h1 className="text-[32px] font-semibold text-white mb-2 tracking-tight">
-        Create an account
-      </h1>
-      <p className="text-[#8A8A9D] text-[14px] mb-8">
-        Start building intelligent WhatsApp agents
-      </p>
-
-      <form onSubmit={submit} className="space-y-4">
-        <AuthField 
-          type="text" 
-          value={form.name} 
-          placeholder="Full name"
-          onChange={(v) => setForm({ ...form, name: v })} 
-        />
-        <AuthField 
-          type="email" 
-          value={form.email} 
-          placeholder="admin@company.com"
-          onChange={(v) => setForm({ ...form, email: v })} 
-        />
-        
-        <div className="relative">
-          <AuthField 
-            type={showPassword ? "text" : "password"} 
-            value={form.password} 
-            placeholder="••••••••"
-            onChange={(v) => setForm({ ...form, password: v })} 
-          />
-          <button 
-            type="button" 
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6C6C7D] hover:text-[#A0A0B0] transition-colors"
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 mt-4 mb-2 px-1">
-          <input type="checkbox" id="terms" className="w-4 h-4 rounded-sm border-none bg-[#2A2A36] text-[#8468F5] focus:ring-[#8468F5] focus:ring-offset-0 cursor-pointer" required />
-          <label htmlFor="terms" className="text-[13px] text-white">
-            I agree to the <a href="#" className="text-[#8468F5] underline hover:text-[#9B84F8]">Terms & Conditions</a>
-          </label>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-[13px] bg-rose-500/10 border border-rose-500/20 text-rose-400">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" strokeLinecap="round" />
-            </svg>
-            {error}
-          </div>
-        )}
-
-        <SubmitButton loading={loading} label="Start free trial" />
-
-        <div className="mt-4 flex justify-center">
-          <GoogleLogin
-            onSuccess={async (credentialResponse) => {
-              try {
-                await googleLogin(credentialResponse.credential);
-                onSuccess();
-              } catch (err) {
-                setError(err.message);
-              }
-            }}
-            onError={() => {
-              setError("Google Sign-In failed");
-            }}
-            theme="filled_black"
-          />
-        </div>
-      </form>
-
-      <div className="mt-8 text-center pt-2">
-        <span className="text-[13px] text-[#8A8A9D]">
-          Already have an account?{" "}
-          <button type="button" onClick={onSwitch} className="text-[#8468F5] underline hover:text-[#9B84F8] transition-colors font-medium">
-            Log in
-          </button>
-        </span>
-      </div>
     </>
   );
 }

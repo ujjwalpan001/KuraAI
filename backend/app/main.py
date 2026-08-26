@@ -13,7 +13,7 @@ from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.contact import router as contact_router
 from app.db.mongodb import connect_mongodb, close_mongodb
-from app.db.seed import seed_tenants_if_empty
+from app.db.seed import seed_tenants_if_empty, seed_admin_if_empty
 from app.db.seed_catalog import seed_catalog_if_empty
 from app.rag.chroma_client import ensure_index_ready
 from app.rag.seed_knowledge import seed_knowledge_if_empty
@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     # Startup — keep this FAST so the port binds and /health responds immediately.
     logger.info("Starting up...")
     await connect_mongodb()
+    await seed_admin_if_empty()
     await seed_tenants_if_empty()
     await seed_knowledge_if_empty()
     await seed_catalog_if_empty()

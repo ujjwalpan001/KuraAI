@@ -13,9 +13,12 @@ const heroVariants = {
 };
 
 const messages = [
-  { id: 1, sender: 'user', text: 'Hi, I need help with my recent order #4592.' },
-  { id: 2, sender: 'ai', text: 'Hello! I can help with that. Let me look up order #4592 for you.' },
-  { id: 3, sender: 'ai', text: 'Your order was shipped yesterday and will arrive by tomorrow.' },
+  { id: 1, sender: 'customer', text: 'Hi there, do you have the wireless earbuds?' },
+  { id: 2, sender: 'ai', text: 'Yes, they are available in stock.' },
+  { id: 3, sender: 'customer', text: 'What is the price?' },
+  { id: 4, sender: 'ai', text: 'The price is 2500. Would you like to place an order?' },
+  { id: 5, sender: 'customer', text: 'Yes, I would like to place an order.' },
+
 ];
 
 export default function HeroSection({ onLoginClick }) {
@@ -24,74 +27,59 @@ export default function HeroSection({ onLoginClick }) {
   const mountedRef = React.useRef(true);
 
   useEffect(() => {
-    mountedRef.current = true;
-    let currentIdx = 0;
-    let timers = [];
-    
-    const showNextMessage = () => {
-      if (!mountedRef.current) return;
-      const msg = messages[currentIdx];
-      if (!msg) return; // guard against out-of-bounds
-      if (msg.sender === 'ai') {
+    let timeout;
+
+    if (displayedMessages.length < messages.length) {
+      const nextMsg = messages[displayedMessages.length];
+
+      if (nextMsg.sender === 'ai') {
         setIsTyping(true);
-        const t1 = setTimeout(() => {
-          if (!mountedRef.current) return;
+        timeout = setTimeout(() => {
           setIsTyping(false);
-          setDisplayedMessages(prev => [...prev, messages[currentIdx]]);
-          currentIdx++;
-          const t2 = setTimeout(showNextMessage, 1500);
-          timers.push(t2);
-        }, 1200);
-        timers.push(t1);
+          setDisplayedMessages(prev => [...prev, nextMsg]);
+        }, 1500);
       } else {
-        setDisplayedMessages(prev => [...prev, messages[currentIdx]]);
-        currentIdx++;
-        const t3 = setTimeout(showNextMessage, 1500);
-        timers.push(t3);
+        timeout = setTimeout(() => {
+          setDisplayedMessages(prev => [...prev, nextMsg]);
+        }, 1000);
       }
-    };
-    
-    const timer = setTimeout(showNextMessage, 1000);
-    timers.push(timer);
-    
-    return () => {
-      mountedRef.current = false;
-      timers.forEach(t => clearTimeout(t));
-    };
-  }, []);
+    }
+
+    return () => clearTimeout(timeout);
+  }, [displayedMessages]);
 
   return (
     <section className="relative min-h-screen flex flex-col overflow-hidden bg-canvas">
       {/* Background Video Placeholder / Animated Gradient */}
       <div className="absolute inset-0 z-0 overflow-hidden">
-         <div className="absolute inset-0 bg-canvas/80 z-10"></div>
-         <motion.div 
-           initial={{ opacity: 0 }}
-           animate={{ opacity: 0.15 }}
-           transition={{ duration: 2 }}
-           className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.1)_0%,transparent_70%)] pointer-events-none" 
-         />
-         <motion.div 
-           initial={{ opacity: 0 }}
-           animate={{ opacity: 0.1 }}
-           transition={{ duration: 2, delay: 0.5 }}
-           className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.1)_0%,transparent_70%)] pointer-events-none" 
-         />
-         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-canvas z-10" />
+        <div className="absolute inset-0 bg-canvas/80 z-10"></div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.15 }}
+          transition={{ duration: 2 }}
+          className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.1)_0%,transparent_70%)] pointer-events-none"
+        />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.1 }}
+          transition={{ duration: 2, delay: 0.5 }}
+          className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.1)_0%,transparent_70%)] pointer-events-none"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-canvas z-10" />
       </div>
 
       {/* Navigation */}
-      <motion.nav 
+      <motion.nav
         variants={navVariants}
         initial="hidden"
         animate="visible"
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 w-full bg-black/40 backdrop-blur-xl border-b border-white/10"
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-2 w-full bg-black/40 backdrop-blur-xl border-b border-white/10"
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
           <div className="flex items-center">
-            <img src="/kura.png" alt="Kura Logo" className="h-14 w-auto object-contain" />
+            <img src="/kura.png" alt="Kura Logo" className="h-20 w-auto object-contain" />
           </div>
-          
+
           <div className="hidden md:flex items-center gap-8 text-[14px] font-medium text-white/70">
             <a href="#video-showcase" onClick={e => { e.preventDefault(); document.getElementById('video-showcase')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-white transition-colors cursor-pointer">Demo</a>
             <a href="#how-it-works" onClick={e => { e.preventDefault(); document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-white transition-colors cursor-pointer">How it Works</a>
@@ -111,9 +99,9 @@ export default function HeroSection({ onLoginClick }) {
 
       {/* Hero Content */}
       <div className="relative z-20 flex-grow flex flex-col lg:flex-row items-center justify-between px-6 max-w-7xl mx-auto w-full mt-24 lg:mt-16">
-        
+
         {/* Left Copy */}
-        <motion.div 
+        <motion.div
           variants={heroVariants}
           initial="hidden"
           animate="visible"
@@ -123,15 +111,15 @@ export default function HeroSection({ onLoginClick }) {
             <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
             <span className="text-[12px] font-medium text-white/80">WhatsApp AI Automation 2.0</span>
           </div>
-          
+
           <h1 className="text-5xl lg:text-7xl font-display font-bold leading-[1.1] tracking-tight mb-6 text-white">
             Your Business Never Stops <span className="text-white/60">Replying</span>
           </h1>
-          
+
           <p className="text-lg lg:text-xl text-muted mb-10 max-w-xl leading-relaxed">
             Let AI handle your WhatsApp conversations, answer customers instantly, and bring your team in when it matters.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <button onClick={onLoginClick} className="w-full sm:w-auto bg-white text-black px-8 py-4 rounded-xl text-[15px] font-semibold hover:bg-white/90 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 group">
               Get Started Free
@@ -145,7 +133,7 @@ export default function HeroSection({ onLoginClick }) {
         </motion.div>
 
         {/* Right Interactive Mockup */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: 50 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
@@ -159,35 +147,34 @@ export default function HeroSection({ onLoginClick }) {
                 A
               </div>
               <div>
-                <h3 className="font-semibold text-[15px] text-white">Support Agent</h3>
+                <h3 className="font-semibold text-[15px] text-white">Kura Agent</h3>
                 <p className="text-[12px] text-white/50">Online</p>
               </div>
             </div>
-            
+
             {/* Chat Area */}
             <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto bg-black bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-opacity-10">
               <AnimatePresence>
                 {displayedMessages.filter(Boolean).map((msg) => (
-                  <motion.div 
+                  <motion.div
                     key={msg.id}
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    className={`max-w-[85%] rounded-2xl p-3 text-[14px] leading-relaxed shadow-sm ${
-                      msg.sender === 'user' 
-                        ? 'bg-white/10 text-white self-end rounded-tr-sm border border-white/5' 
+                    className={`max-w-[85%] rounded-2xl p-3 text-[14px] leading-relaxed shadow-sm ${msg.sender === 'ai'
+                        ? 'bg-white/10 text-white self-end rounded-tr-sm border border-white/5'
                         : 'bg-white text-black self-start rounded-tl-sm'
-                    }`}
+                      }`}
                   >
                     {msg.text}
                   </motion.div>
                 ))}
-                
+
                 {isTyping && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="bg-white/10 text-white self-start rounded-2xl rounded-tl-sm p-3 w-16 h-10 flex items-center justify-center gap-1 border border-white/5"
+                    className="bg-white/10 text-white self-end rounded-2xl rounded-tr-sm p-3 w-16 h-10 flex items-center justify-center gap-1 border border-white/5"
                   >
                     <motion.div animate={{ y: [0, -3, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} className="w-1.5 h-1.5 rounded-full bg-white/70" />
                     <motion.div animate={{ y: [0, -3, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="w-1.5 h-1.5 rounded-full bg-white/70" />
@@ -196,7 +183,7 @@ export default function HeroSection({ onLoginClick }) {
                 )}
               </AnimatePresence>
             </div>
-            
+
             {/* Input Area */}
             <div className="bg-[#111111] p-4 flex items-center gap-2 border-t border-white/5">
               <div className="flex-1 bg-white/5 border border-white/10 rounded-full h-10 px-4 flex items-center">
@@ -207,7 +194,7 @@ export default function HeroSection({ onLoginClick }) {
               </div>
             </div>
           </div>
-          
+
           {/* Decorative floating elements */}
           <div
             className="absolute -right-12 top-20 bg-black border border-white/10 rounded-xl p-4 shadow-xl hidden lg:flex items-center gap-3"
