@@ -364,39 +364,39 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                   Define the AI's personality, boundaries, and specific rules for this tenant. The engine will automatically append RAG context and catalog data below this prompt.
                 </p>
                 <div>
-                  <div className="mb-4 flex items-center gap-3 bg-canvas p-4 rounded-lg border border-hair">
-                    <input 
-                      type="checkbox" 
-                      id="exclusiveMode"
-                      checked={formData.exclusive_prompt_mode || false}
-                      onChange={e => setFormData({...formData, exclusive_prompt_mode: e.target.checked})}
-                      className="w-4 h-4 accent-brand rounded border-hair cursor-pointer"
-                    />
-                    <div>
-                      <label htmlFor="exclusiveMode" className="text-[13px] font-semibold text-ink block cursor-pointer">Exclusive Prompt Mode (Auto-Reply)</label>
-                      <p className="text-[12px] text-muted mt-1">If enabled, the AI completely ignores global rules and only follows the strict instructions below (great for 'Out of Office' auto-replies).</p>
+                  <div className="mb-6 flex items-start gap-4 bg-surface p-5 rounded-xl border border-hair shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, exclusive_prompt_mode: !formData.exclusive_prompt_mode})}
+                      className={`relative inline-flex h-6 w-11 mt-0.5 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.exclusive_prompt_mode ? 'bg-brand' : 'bg-canvas border-hair'}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow ring-0 transition duration-200 ease-in-out ${formData.exclusive_prompt_mode ? 'translate-x-5 bg-white' : 'translate-x-0 bg-muted'}`} />
+                    </button>
+                    <div className="flex-1">
+                      <label onClick={() => setFormData({...formData, exclusive_prompt_mode: !formData.exclusive_prompt_mode})} className="text-[14px] font-semibold text-ink block cursor-pointer">Exclusive Prompt Mode (Auto-Reply)</label>
+                      <p className="text-[13px] text-muted mt-1 leading-relaxed">If enabled, the AI completely ignores global rules and only follows the strict instructions below. Use this to create guaranteed "Out of Office" auto-replies.</p>
                     </div>
                   </div>
 
                   {formData.exclusive_prompt_mode ? (
-                    <div>
-                      <label className="text-[12px] font-semibold text-brand mb-2 block">Exclusive Prompt</label>
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <label className="text-[12px] font-semibold text-brand mb-2 block uppercase tracking-wider">Exclusive Instructions</label>
                       <textarea 
                         rows={8} 
                         value={formData.exclusive_prompt || ""}
                         onChange={e => setFormData({...formData, exclusive_prompt: e.target.value})}
-                        className="w-full px-4 py-3 bg-canvas border border-brand/50 rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y ring-1 ring-brand/10"
+                        className="w-full px-4 py-3 bg-canvas border border-brand/40 rounded-xl text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y shadow-[0_0_15px_rgba(var(--color-brand-rgb),0.1)]"
                         placeholder="e.g. Just reply 'We will be back soon' for everything. Do not reply anything else."
                       />
                     </div>
                   ) : (
-                    <div>
-                      <label className="text-[12px] font-semibold text-muted mb-2 block">Standard System Prompt</label>
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <label className="text-[12px] font-semibold text-muted mb-2 block uppercase tracking-wider">Standard System Prompt</label>
                       <textarea 
                         rows={12} 
                         value={formData.system_prompt || ""}
                         onChange={e => setFormData({...formData, system_prompt: e.target.value})}
-                        className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y"
+                        className="w-full px-4 py-3 bg-canvas border border-hair rounded-xl text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed resize-y"
                         placeholder="You are a helpful assistant..."
                       />
                     </div>
