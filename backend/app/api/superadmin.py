@@ -221,7 +221,7 @@ async def get_messages():
 class GlobalSettingsIn(BaseModel):
     master_system_prompt: str
 
-@router.get("/settings")
+@router.get("/global_settings")
 async def get_global_settings():
     db = get_db()
     settings = await db.global_settings.find_one({"_id": "main"})
@@ -230,7 +230,7 @@ async def get_global_settings():
     settings.pop("_id", None)
     return settings
 
-@router.put("/settings")
+@router.put("/global_settings")
 async def update_global_settings(req: GlobalSettingsIn):
     db = get_db()
     await db.global_settings.update_one(

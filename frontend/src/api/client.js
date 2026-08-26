@@ -168,6 +168,6 @@ export const api = {
   saUpdateTenantLimits: (id, limits) => send(`/api/superadmin/tenants/${id}/limits`, "PUT", limits),
   addAdmin: (data) => send("/api/superadmin/admins", "POST", data),
   removeAdmin: (username) => send(`/api/superadmin/admins/${username}`, "DELETE"),
-  getGlobalSettings: () => get("/api/superadmin/settings"),
-  updateGlobalSettings: (data) => send("/api/superadmin/settings", "PUT", data)
+  getGlobalSettings: () => get("/api/superadmin/global_settings"),
+  updateGlobalSettings: (data) => send("/api/superadmin/global_settings", "PUT", data)
 };
