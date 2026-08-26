@@ -109,6 +109,15 @@ export default function SuperAdmin({ user, activeTab }) {
     }
   };
 
+  const handleSaveGlobalSettings = async () => {
+    try {
+      await api.updateGlobalSettings(globalSettings);
+      alert("Global settings saved successfully!");
+    } catch (e) {
+      alert("Failed to save global settings: " + e.message);
+    }
+  };
+
   if (user?.role !== "SUPER_ADMIN") {
     return (
       <div className="p-8 text-center flex flex-col items-center justify-center h-[80vh]">
