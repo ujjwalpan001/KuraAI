@@ -30,10 +30,9 @@ async def _groq_create(groq, **kwargs):
             last = e
             m = str(e).lower()
             
-            # If the user selected a model they don't have access to, fallback instantly
-            if "does not exist" in m or "model_not_found" in m or "no access" in m:
-                logger.warning(f"Groq model {kwargs.get('model')} not accessible. Falling back to llama3-8b-8192.")
-                kwargs["model"] = "llama3-8b-8192"
+            if "does not exist" in m or "model_not_found" in m or "no access" in m or "decommissioned" in m:
+                logger.warning(f"Groq model {kwargs.get('model')} not accessible or decommissioned. Falling back to mixtral-8x7b-32768.")
+                kwargs["model"] = "mixtral-8x7b-32768"
                 continue
                 
             if any(w in m for w in ("rate", "429", "limit", "timeout", "temporar", "overload", "503")):

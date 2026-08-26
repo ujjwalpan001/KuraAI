@@ -14,16 +14,20 @@ def get_qdrant_client():
     global _client
     if _client is None:
         if settings.qdrant_url and settings.qdrant_api_key:
-            _client = QdrantClient(
-                url=settings.qdrant_url,
-                api_key=settings.qdrant_api_key,
-            )
-            # Ensure collection exists
-            if not _client.collection_exists(_collection_name):
-                _client.create_collection(
-                    collection_name=_collection_name,
-                    vectors_config=_client.get_fastembed_vector_params()
+            try:
+                _client = QdrantClient(
+                    url=settings.qdrant_url,
+                    api_key=settings.qdrant_api_key,
                 )
+                # Ensure collection exists
+                if not _client.collection_exists(_collection_name):
+                    _client.create_collection(
+                        collection_name=_collection_name,
+                        vectors_config=_client.get_fastembed_vector_params()
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to initialize Qdrant client (database might be sleeping): {e}")
+                _client = None
         else:
             logger.warning("Qdrant credentials missing. Vector DB will not work.")
     return _client
