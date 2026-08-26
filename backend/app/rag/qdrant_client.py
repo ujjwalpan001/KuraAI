@@ -81,18 +81,22 @@ def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3, catego
     if category and category != "all":
         must_conditions.append(FieldCondition(key="doc_type", match=MatchValue(value=category)))
 
-    search_result = client.query(
-        collection_name=_collection_name,
-        query_text=query,
-        query_filter=Filter(must=must_conditions),
-        limit=n_results
-    )
-
-    chunks = []
-    for hit in search_result:
-        if hit.score > 0.8:  # threshold (depending on metric)
-            chunks.append(hit.document)
-    return chunks
+    try:
+        search_result = client.query(
+            collection_name=_collection_name,
+            query_text=query,
+            query_filter=Filter(must=must_conditions),
+            limit=n_results
+        )
+    
+        chunks = []
+        for hit in search_result:
+            if hit.score > 0.8:  # threshold (depending on metric)
+                chunks.append(hit.document)
+        return chunks
+    except Exception as e:
+        logger.warning(f"Qdrant search failed (returning empty chunks): {e}")
+        return []
 
 def search_catalog(query: str, tenant_id: str) -> dict | None:
     """Semantic search over visual CATALOG items, tenant-scoped."""
@@ -100,17 +104,21 @@ def search_catalog(query: str, tenant_id: str) -> dict | None:
     if not client:
         return None
 
-    search_result = client.query(
-        collection_name=_collection_name,
-        query_text=query,
-        query_filter=Filter(must=[
-            FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
-            FieldCondition(key="type", match=MatchValue(value="catalog"))
-        ]),
-        limit=1
-    )
-
-    if not search_result:
+    try:
+        search_result = client.query(
+            collection_name=_collection_name,
+            query_text=query,
+            query_filter=Filter(must=[
+                FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                FieldCondition(key="type", match=MatchValue(value="catalog"))
+            ]),
+            limit=1
+        )
+    
+        if not search_result:
+            return None
+    except Exception as e:
+        logger.warning(f"Qdrant catalog search failed: {e}")
         return None
 
     hit = search_result[0]

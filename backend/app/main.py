@@ -67,6 +67,15 @@ app.include_router(superadmin_router)
 @app.get("/health")
 @app.head("/health")
 async def health():
+    try:
+        # Ping Qdrant to keep the free tier cluster awake 24/7
+        from app.rag.qdrant_client import get_qdrant_client
+        import asyncio
+        client = get_qdrant_client()
+        if client:
+            await asyncio.to_thread(client.get_collections)
+    except Exception as e:
+        logger.warning(f"Qdrant keepalive ping failed: {e}")
     return Response(status_code=200)
 
 

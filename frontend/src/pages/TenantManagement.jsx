@@ -107,7 +107,7 @@ function WhatsAppPanel({ instanceName, tenantId, onCreated }) {
     );
   }
 
-  const connState = state || "close";
+  const connState = state || "connecting";
   const StateIcon = STATE_ICONS[connState] || AlertCircle;
   const stateColor = STATE_COLORS[connState] || "text-muted";
   const stateLabel = STATE_LABELS[connState] || connState;
