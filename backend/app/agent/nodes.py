@@ -661,6 +661,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 # Send notification to admin
                 try:
                     admin_numbers = tenant.get("personal_numbers") or []
+                    if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                        admin_numbers.append(tenant.get("owner_number"))
                     if admin_numbers:
                         instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
                         notif_msg = f"🛒 *NEW ORDER RECEIVED!*\n\n*ID:* {order_id_str}\n*Product:* {product} (x{qty})\n*Customer:* {state['customer_phone']}\n*Details:* {json.dumps(info, indent=2)}\n\n_Check your dashboard to manage this order._"
@@ -695,6 +697,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     # Notify admin
                     try:
                         admin_numbers = tenant.get("personal_numbers") or []
+                        if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                            admin_numbers.append(tenant.get("owner_number"))
                         if admin_numbers:
                             instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
                             notif_msg = f"💳 *PAYMENT PROOF SUBMITTED!*\n\n*Customer:* {state['customer_phone']}\n*Order:* {recent_order.get('product_name')}\n*Proof:* {txn_id}\n\n_Please check your dashboard to verify this payment._"
@@ -731,6 +735,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                         # Notify admin
                         try:
                             admin_numbers = tenant.get("personal_numbers") or []
+                            if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                                admin_numbers.append(tenant.get("owner_number"))
                             if admin_numbers:
                                 instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
                                 notif_msg = f"⚠️ *RETURN REQUESTED!*\n\n*Order ID:* {target_order_id}\n*Customer:* {state['customer_phone']}\n*Reason:* {reason}\n\n_Please check your dashboard to process the return._"
@@ -790,6 +796,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                             # Notify admin
                             try:
                                 admin_numbers = tenant.get("personal_numbers") or []
+                                if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                                    admin_numbers.append(tenant.get("owner_number"))
                                 if admin_numbers:
                                     instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
                                     notif_msg = f"❌ *ORDER CANCELLED!*\n\n*Order ID:* {target_order_id}\n*Customer:* {state['customer_phone']}\n\n_The customer successfully cancelled this order._"
