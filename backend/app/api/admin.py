@@ -572,7 +572,14 @@ async def evo_get_qr(instance_name: str):
         result = await wa_client.get_qr_code(instance_name)
         return {"ok": True, "qr": result}
     except Exception as e:
-        raise HTTPException(500, f"Failed to get QR code: {e}")
+        print(f"Failed to get QR code for {instance_name}, attempting to recreate: {e}")
+        try:
+            webhook_url = f"{settings.app_base_url}/api/webhooks/whatsapp"
+            await wa_client.create_instance(instance_name, webhook_url)
+            result = await wa_client.get_qr_code(instance_name)
+            return {"ok": True, "qr": result}
+        except Exception as e2:
+            raise HTTPException(500, f"Failed to get QR code: {e} | Recreate failed: {e2}")
 
 
 @router.get("/evolution/instances/{instance_name}/state")
