@@ -177,9 +177,11 @@ async def reply_to_session(session_id: str, body: ReplyIn):
 
 class BroadcastRequest(BaseModel):
     tenant_id: str
-    phone_numbers: list[str]
+    contacts: list[dict]  # e.g. [{"phone": "123", "name": "John"}]
     message: str
-
+    media_url: str | None = None
+    media_type: str | None = None
+    media_filename: str | None = None
 
 @router.post("/api/broadcast")
 async def broadcast(req: BroadcastRequest):
@@ -189,12 +191,30 @@ async def broadcast(req: BroadcastRequest):
         raise HTTPException(status_code=404, detail="Tenant not found")
 
     results = {"sent": [], "failed": []}
-    for phone in req.phone_numbers:
+    instance_name = tenant.get("evolution_instance") or "default"
+    
+    for contact in req.contacts:
+        phone = contact.get("phone", "").strip()
+        if not phone:
+            continue
+            
+        name = contact.get("name", "").strip()
+        # Replace {name} with actual name or empty string if no name provided
+        personalized_message = req.message.replace("{name}", name if name else "")
+        
         try:
-            instance_name = tenant.get("evolution_instance") or "default"
-            await send_text_message(
-                instance_name, phone, req.message
-            )
+            if req.media_url and req.media_type:
+                import app.whatsapp.client as wa
+                if req.media_type == "IMAGE":
+                    await wa.send_image_message(instance_name, phone, req.media_url, personalized_message)
+                elif req.media_type == "DOCUMENT":
+                    await wa.send_document_message(instance_name, phone, req.media_url, req.media_filename or "document.pdf")
+                    if personalized_message:
+                        await wa.send_text_message(instance_name, phone, personalized_message)
+            else:
+                import app.whatsapp.client as wa
+                await wa.send_text_message(instance_name, phone, personalized_message)
+                
             results["sent"].append(phone)
         except Exception as e:
             results["failed"].append({"phone": phone, "error": str(e)})

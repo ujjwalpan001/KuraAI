@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Megaphone, Users, MessageSquare, Send, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Megaphone, Users, MessageSquare, Send, CheckCircle2, AlertCircle, Paperclip, X } from "lucide-react";
 import { api } from "../api/client";
 
 export default function Broadcasts({ tenantId }) {
@@ -7,23 +7,66 @@ export default function Broadcasts({ tenantId }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null); // { sent: [...], failed: [...] }
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaData, setMediaData] = useState(null); // { url, type, filename }
+  const [tenantObj, setTenantObj] = useState(null);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    api.adminTenants().then(res => {
+      const t = res.tenants.find(t => t.tenant_id === tenantId);
+      if (t) setTenantObj(t);
+    }).catch(e => console.error("Failed to load tenant", e));
+  }, [tenantId]);
+
+  const handleMediaUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!tenantId) {
+      alert("Please select a tenant first.");
+      return;
+    }
+    
+    setMediaUploading(true);
+    try {
+      const keyword = `broadcast_${Date.now()}`;
+      const res = await api.addMedia(tenantId, keyword, file);
+      let mType = "IMAGE";
+      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        mType = "DOCUMENT";
+      }
+      setMediaData({ url: res.url, type: mType, filename: file.name });
+    } catch (err) {
+      alert("Media upload failed: " + err.message);
+    } finally {
+      setMediaUploading(false);
+    }
+  };
 
   const handleBroadcast = async () => {
     if (!tenantId) {
       alert("Please select a tenant first.");
       return;
     }
-    const phoneList = phones
+    const contactList = phones
       .split("\n")
       .map(p => p.trim())
-      .filter(p => p.length > 5);
+      .filter(p => p.length > 5)
+      .map(p => {
+        const parts = p.split(",");
+        if (parts.length >= 2) {
+          return { phone: parts[0].trim(), name: parts.slice(1).join(",").trim() };
+        }
+        return { phone: p.trim(), name: "" };
+      });
 
-    if (phoneList.length === 0) {
+    if (contactList.length === 0) {
       alert("Please enter at least one valid phone number.");
       return;
     }
-    if (!message.trim()) {
-      alert("Please enter a message to broadcast.");
+    if (!message.trim() && !mediaData) {
+      alert("Please enter a message or attach media to broadcast.");
       return;
     }
 
@@ -32,13 +75,18 @@ export default function Broadcasts({ tenantId }) {
     try {
       const res = await api.broadcast({
         tenant_id: tenantId,
-        phone_numbers: phoneList,
-        message: message.trim()
+        contacts: contactList,
+        message: message.trim(),
+        media_url: mediaData?.url,
+        media_type: mediaData?.type,
+        media_filename: mediaData?.filename
       });
       setResult(res);
       if (res.failed && res.failed.length === 0) {
         setPhones("");
         setMessage("");
+        setMediaData(null);
+        setMediaFile(null);
       }
     } catch (e) {
       alert("Broadcast failed: " + e.message);
@@ -77,11 +125,12 @@ export default function Broadcasts({ tenantId }) {
               <textarea
                 value={phones}
                 onChange={(e) => setPhones(e.target.value)}
-                placeholder="Enter numbers with country code, one per line&#10;e.g. 15551234567&#10;447700900000"
+                placeholder="Format: Phone, Name&#10;e.g. 15551234567, John Doe&#10;447700900000, Alice"
                 className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand font-mono leading-relaxed h-32 resize-none"
               />
-              <p className="text-[11px] text-muted mt-1.5 text-right">
-                {phones.split("\n").filter(p => p.trim().length > 5).length} valid numbers detected
+              <p className="text-[11px] text-muted mt-1.5 flex justify-between">
+                <span>Use {'{name}'} in your message to personalize it!</span>
+                <span>{phones.split("\n").filter(p => p.trim().length > 5).length} valid contacts</span>
               </p>
             </div>
 
@@ -92,9 +141,74 @@ export default function Broadcasts({ tenantId }) {
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Hello! Check out our new summer collection..."
+                placeholder="Hello {name}! Check out our new summer collection..."
                 className="w-full px-4 py-3 bg-canvas border border-hair rounded-lg text-[13px] text-ink focus:outline-none focus:border-brand leading-relaxed h-32 resize-none"
               />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-[12px] font-semibold text-muted uppercase tracking-wider mb-2">
+                  <Paperclip size={14} /> Attach Media (Optional)
+                </label>
+              </div>
+              {mediaData ? (
+                <div className="flex items-center justify-between p-3 bg-brand/5 border border-brand/20 rounded-lg">
+                  <span className="text-[12px] font-mono text-brand truncate pr-4">
+                    {mediaData.filename}
+                  </span>
+                  <button 
+                    onClick={() => setMediaData(null)}
+                    className="p-1 hover:bg-brand/10 rounded text-brand/70 hover:text-brand transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 w-full">
+                  <label className="flex items-center justify-center gap-2 w-full p-4 border border-dashed border-hair rounded-lg hover:bg-canvas cursor-pointer transition-colors text-muted hover:text-ink">
+                    {mediaUploading ? (
+                      <span className="text-[12px] animate-pulse">Uploading...</span>
+                    ) : (
+                      <>
+                        <Paperclip size={16} />
+                        <span className="text-[13px] font-medium">Click to upload Image or PDF from device</span>
+                      </>
+                    )}
+                    <input type="file" className="hidden" accept="image/*,application/pdf" onChange={handleMediaUpload} disabled={mediaUploading} />
+                  </label>
+
+                  {tenantObj?.media_library && Object.keys(tenantObj.media_library).length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3 opacity-50">
+                        <div className="h-px bg-hair flex-1"></div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted">OR</span>
+                        <div className="h-px bg-hair flex-1"></div>
+                      </div>
+                      <select 
+                        className="w-full bg-canvas border border-hair rounded-lg text-[13px] px-3 py-2.5 outline-none focus:border-brand text-ink cursor-pointer"
+                        onChange={(e) => {
+                          const url = e.target.value;
+                          if (!url) return;
+                          const keyword = e.target.options[e.target.selectedIndex].text;
+                          let mType = "IMAGE";
+                          if (url.toLowerCase().endsWith(".pdf") || url.includes("/files/")) {
+                             mType = "DOCUMENT";
+                          }
+                          setMediaData({ url, type: mType, filename: keyword + (mType === "DOCUMENT" ? ".pdf" : ".jpg") });
+                          e.target.value = "";
+                        }}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Select existing file from Media Library...</option>
+                        {Object.entries(tenantObj.media_library).map(([kw, url]) => (
+                          <option key={kw} value={url}>{kw.replace(/_/g, ' ').toUpperCase()}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <button
