@@ -321,6 +321,7 @@ export default function TenantManagement({ tenants, activeTenant, onSelectTenant
                   <Phone size={16} className="text-emerald-500" /> WhatsApp Connection
                 </h3>
                 <WhatsAppPanel 
+                  key={activeTenant}
                   instanceName={formData.evolution_instance} 
                   tenantId={activeTenant} 
                   onCreated={(newInstanceName) => {
