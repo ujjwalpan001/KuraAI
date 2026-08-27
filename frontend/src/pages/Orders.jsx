@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
-import { Package, MapPin, Phone, CheckCircle, Clock, Truck, XCircle, Search, RotateCcw } from "lucide-react";
+import { Package, MapPin, Phone, CheckCircle, Clock, Truck, XCircle, Search, RotateCcw, ChevronUp, ChevronDown } from "lucide-react";
 
 const STATUSES = [
   { id: "PENDING", label: "New Orders", icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
@@ -19,6 +19,8 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
   const [returnDays, setReturnDays] = useState(tenantObj?.return_days ?? 7);
   const [cancellationCutoff, setCancellationCutoff] = useState(tenantObj?.cancellation_cutoff_status || "SHIPPED");
   const [cancellationHours, setCancellationHours] = useState(tenantObj?.cancellation_hours ?? 24);
+  const [ownerNumber, setOwnerNumber] = useState(tenantObj?.owner_number || "");
+  const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
@@ -26,6 +28,7 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
       setReturnDays(tenantObj.return_days ?? 7);
       setCancellationCutoff(tenantObj.cancellation_cutoff_status || "SHIPPED");
       setCancellationHours(tenantObj.cancellation_hours ?? 24);
+      setOwnerNumber(tenantObj.owner_number || "");
     }
   }, [tenantObj]);
 
@@ -95,7 +98,8 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
         ...tenantObj, 
         return_days: returnDays,
         cancellation_cutoff_status: cancellationCutoff,
-        cancellation_hours: cancellationHours
+        cancellation_hours: cancellationHours,
+        owner_number: ownerNumber
       });
       if (onTenantsChanged) await onTenantsChanged();
       alert("Order policies updated successfully!");
@@ -221,27 +225,50 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
       </div>
 
       {/* Advanced Settings for Orders */}
-      {(tenantObj?.returns_enabled || tenantObj?.cancellations_enabled) && (
-        <div className="mt-8 bg-surface border border-hair rounded-xl p-6">
-          <h3 className="text-[15px] font-display font-semibold mb-4 text-ink">Advanced Settings</h3>
-          <div className="flex flex-col md:flex-row gap-6 items-end">
-            
-            {tenantObj?.returns_enabled && (
+      <div className="mt-8 bg-surface border border-hair rounded-xl overflow-hidden">
+        <button 
+          onClick={() => setIsAdvancedSettingsOpen(!isAdvancedSettingsOpen)}
+          className="w-full flex items-center justify-between p-6 bg-surface hover:bg-canvas transition-colors text-left focus:outline-none"
+        >
+          <div className="flex items-center gap-3">
+            <h3 className="text-[15px] font-display font-semibold text-ink">Advanced Settings</h3>
+            <span className="text-[11px] text-brand/80 font-bold bg-brand/10 px-2 py-0.5 rounded-full uppercase tracking-wide">Owner & Policies</span>
+          </div>
+          {isAdvancedSettingsOpen ? <ChevronUp size={18} className="text-muted" /> : <ChevronDown size={18} className="text-muted" />}
+        </button>
+
+        {isAdvancedSettingsOpen && (
+          <div className="p-6 pt-0 border-t border-hair flex flex-col gap-6 mt-4">
+            <div className="flex flex-col md:flex-row gap-6 items-start">
               <div className="w-full md:w-1/3">
-                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Return Window (Days)</label>
+                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Owner WhatsApp Number</label>
                 <input 
-                  type="number"
-                  min="0"
-                  value={returnDays}
-                  onChange={e => setReturnDays(parseInt(e.target.value) || 0)}
+                  type="text"
+                  placeholder="e.g. 919876543210"
+                  value={ownerNumber}
+                  onChange={e => setOwnerNumber(e.target.value)}
                   className="w-full bg-canvas border border-hair rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-brand transition-colors font-mono" 
                 />
-                <p className="text-[11px] text-muted mt-2">Days allowed for return after delivery.</p>
+                <p className="text-[11px] text-muted mt-2">Get direct notifications for orders and payments.</p>
               </div>
-            )}
+
+              {tenantObj?.returns_enabled && (
+                <div className="w-full md:w-1/3">
+                  <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Return Window (Days)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    value={returnDays}
+                    onChange={e => setReturnDays(parseInt(e.target.value) || 0)}
+                    className="w-full bg-canvas border border-hair rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-brand transition-colors font-mono" 
+                  />
+                  <p className="text-[11px] text-muted mt-2">Days allowed for return after delivery.</p>
+                </div>
+              )}
+            </div>
 
             {tenantObj?.cancellations_enabled && (
-              <div className="w-full md:w-1/2 flex gap-4">
+              <div className="w-full md:w-2/3 flex gap-4">
                 <div className="flex-1">
                   <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">No Cancellations After (Status)</label>
                   <select 
@@ -269,16 +296,18 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
               </div>
             )}
             
-            <button 
-              onClick={handleSaveSettings}
-              disabled={savingSettings}
-              className="px-6 py-2.5 bg-brand text-white text-[13px] font-bold rounded-lg hover:bg-brand-deep transition-colors disabled:opacity-50"
-            >
-              {savingSettings ? "Saving..." : "Save Settings"}
-            </button>
+            <div className="pt-4 border-t border-hair flex justify-start">
+              <button 
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="px-8 py-2.5 bg-brand text-white text-[13px] font-bold rounded-lg hover:bg-brand-deep transition-colors disabled:opacity-50"
+              >
+                {savingSettings ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
