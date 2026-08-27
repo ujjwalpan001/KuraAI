@@ -48,6 +48,11 @@ async def get_metrics():
     
     for client in clients:
         client_created_at = client.get("created_at", datetime.utcnow())
+        if isinstance(client_created_at, str):
+            try:
+                client_created_at = datetime.fromisoformat(client_created_at.replace('Z', '+00:00'))
+            except ValueError:
+                client_created_at = datetime.utcnow()
         client_expire_at = client_created_at + timedelta(days=365) # Yearly renewal for agency
         client["register_day"] = client_created_at.strftime("%b %d, %Y")
         client["expire_day"] = client_expire_at.strftime("%b %d, %Y")
@@ -64,6 +69,11 @@ async def get_metrics():
             t_tokens = 0 # No fake data: set to 0 until actual LLM usage hook is built
             
             created_at = t.get("created_at", datetime.utcnow())
+            if isinstance(created_at, str):
+                try:
+                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except ValueError:
+                    created_at = datetime.utcnow()
             expire_at = created_at + timedelta(days=30)
             days_remaining = (expire_at - datetime.utcnow()).days
             
