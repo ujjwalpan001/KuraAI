@@ -47,8 +47,8 @@ function WhatsAppPanel({ instanceName, tenantId, onCreated }) {
   const handleCreate = async () => {
     setLoading(true);
     try {
-      // Evolution API strips dots and special chars. Add a random suffix to prevent collisions.
-      const safeInstanceName = tenantId.replace(/[^a-zA-Z0-9]/g, "") + "-" + Math.random().toString(36).substring(2, 6);
+      // Evolution API v2 strictly requires alphanumeric only. No hyphens allowed!
+      const safeInstanceName = tenantId.replace(/[^a-zA-Z0-9]/g, "") + Math.random().toString(36).substring(2, 6);
       await api.evoCreateInstance(tenantId, safeInstanceName);
       onCreated(safeInstanceName);
     } catch (e) {
