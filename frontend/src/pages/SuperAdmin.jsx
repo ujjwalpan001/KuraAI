@@ -431,92 +431,120 @@ export default function SuperAdmin({ user, activeTab }) {
                                 </div>
 
                                 {/* Limits Configuration */}
-                                <div className="border-t border-white/5 pt-4 flex flex-wrap lg:flex-nowrap items-end justify-between gap-4">
-                                  <div className="flex items-center gap-8">
-                                    <div className="flex flex-col gap-2">
-                                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5"><Activity size={12}/> Msgs per Minute</label>
+                                <div className="border-t border-white/5 pt-6 mt-2">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h4 className="text-[12px] font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                                      <Activity size={14} className="text-indigo-400"/> Bot Configuration Limits & Features
+                                    </h4>
+                                    <div>
                                       {editingLimits?.tenant_id === t.tenant_id ? (
-                                        <input type="number" className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[12px] text-white outline-none focus:border-brand" 
-                                          value={editingLimits.rate_limit_per_minute} onChange={(e) => setEditingLimits({...editingLimits, rate_limit_per_minute: e.target.value})} />
+                                        <div className="flex gap-2">
+                                          <button onClick={() => setEditingLimits(null)} className="px-3 py-1.5 text-[11px] font-bold text-white/40 hover:text-white transition-colors">CANCEL</button>
+                                          <button onClick={() => handleSaveLimits(t.tenant_id)} className="px-3 py-1.5 bg-brand text-white rounded-lg text-[11px] font-bold shadow-lg hover:bg-brand-deep transition-all">SAVE CONFIG</button>
+                                        </div>
                                       ) : (
-                                        <div className="text-[13px] font-semibold text-white/80">{t.rate_limit_per_minute} msg/min</div>
+                                        <button onClick={() => setEditingLimits({ 
+                                          tenant_id: t.tenant_id, 
+                                          rate_limit_per_minute: t.rate_limit_per_minute || 25, 
+                                          retention_hours: t.retention_hours || 72,
+                                          orders_enabled: t.orders_enabled || false,
+                                          returns_enabled: t.returns_enabled || false,
+                                          cancellations_enabled: t.cancellations_enabled || false,
+                                          order_requirements: (t.order_requirements || []).join(", ")
+                                        })} className="px-3 py-1.5 border border-white/10 text-white/60 hover:text-white hover:bg-white/5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap">EDIT CONFIG</button>
                                       )}
                                     </div>
-                                      <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5"><Save size={12}/> Retention Timer</label>
-                                        {editingLimits?.tenant_id === t.tenant_id ? (
-                                          <select className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[12px] text-white outline-none focus:border-brand" 
-                                            value={editingLimits.retention_hours} onChange={(e) => setEditingLimits({...editingLimits, retention_hours: e.target.value})}>
-                                            <option value="24">24 Hours</option>
-                                            <option value="48">48 Hours</option>
-                                            <option value="72">72 Hours</option>
-                                            <option value="168">7 Days</option>
-                                            <option value="720">30 Days</option>
-                                          </select>
-                                        ) : (
-                                          <div className="text-[13px] font-semibold text-white/80">{t.retention_hours} hours</div>
-                                        )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Limits Box */}
+                                    <div className="bg-black/20 border border-white/5 rounded-xl p-4">
+                                      <div className="text-[11px] font-bold text-white/40 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">Rate & Retention Limits</div>
+                                      <div className="grid grid-cols-2 gap-6">
+                                        <div className="flex flex-col gap-2">
+                                          <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">Msgs per Minute</label>
+                                          {editingLimits?.tenant_id === t.tenant_id ? (
+                                            <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-brand" 
+                                              value={editingLimits.rate_limit_per_minute} onChange={(e) => setEditingLimits({...editingLimits, rate_limit_per_minute: e.target.value})} />
+                                          ) : (
+                                            <div className="text-[14px] font-medium text-white">{t.rate_limit_per_minute} <span className="text-[11px] text-white/40 ml-1">msg/min</span></div>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                          <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">Retention Timer</label>
+                                          {editingLimits?.tenant_id === t.tenant_id ? (
+                                            <select className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-brand" 
+                                              value={editingLimits.retention_hours} onChange={(e) => setEditingLimits({...editingLimits, retention_hours: e.target.value})}>
+                                              <option value="24">24 Hours</option>
+                                              <option value="48">48 Hours</option>
+                                              <option value="72">72 Hours</option>
+                                              <option value="168">7 Days</option>
+                                              <option value="720">30 Days</option>
+                                            </select>
+                                          ) : (
+                                            <div className="text-[14px] font-medium text-white">{t.retention_hours} <span className="text-[11px] text-white/40 ml-1">hours</span></div>
+                                          )}
+                                        </div>
                                       </div>
-                                      
-                                      <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-bold text-brand uppercase tracking-wider flex items-center gap-1.5">Enable Orders</label>
-                                        {editingLimits?.tenant_id === t.tenant_id ? (
-                                          <input type="checkbox" className="w-4 h-4 accent-brand cursor-pointer" 
-                                            checked={editingLimits.orders_enabled} onChange={(e) => setEditingLimits({...editingLimits, orders_enabled: e.target.checked})} />
-                                        ) : (
-                                          <div className={`text-[12px] font-semibold ${t.orders_enabled ? 'text-brand' : 'text-white/40'}`}>{t.orders_enabled ? "Yes" : "No"}</div>
-                                        )}
+                                    </div>
+
+                                    {/* E-Commerce Box */}
+                                    <div className="bg-black/20 border border-white/5 rounded-xl p-4">
+                                      <div className="text-[11px] font-bold text-white/40 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">E-Commerce Features</div>
+                                      <div className="grid grid-cols-3 gap-4 mb-4">
+                                        <div className="flex flex-col gap-2">
+                                          <label className="text-[10px] font-bold text-brand uppercase tracking-wider flex items-center gap-1.5">Orders</label>
+                                          {editingLimits?.tenant_id === t.tenant_id ? (
+                                            <select className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[12px] text-white outline-none focus:border-brand" 
+                                              value={editingLimits.orders_enabled ? "yes" : "no"} onChange={(e) => setEditingLimits({...editingLimits, orders_enabled: e.target.value === "yes"})} >
+                                              <option value="yes">Enabled</option>
+                                              <option value="no">Disabled</option>
+                                            </select>
+                                          ) : (
+                                            <div className={`text-[13px] font-semibold ${t.orders_enabled ? 'text-brand' : 'text-white/40'}`}>{t.orders_enabled ? "Enabled" : "Disabled"}</div>
+                                          )}
+                                        </div>
+
+                                        <div className="flex flex-col gap-2">
+                                          <label className="text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">Returns</label>
+                                          {editingLimits?.tenant_id === t.tenant_id ? (
+                                            <select className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[12px] text-white outline-none focus:border-brand" 
+                                              value={editingLimits.returns_enabled ? "yes" : "no"} onChange={(e) => setEditingLimits({...editingLimits, returns_enabled: e.target.value === "yes"})} >
+                                              <option value="yes">Enabled</option>
+                                              <option value="no">Disabled</option>
+                                            </select>
+                                          ) : (
+                                            <div className={`text-[13px] font-semibold ${t.returns_enabled ? 'text-orange-400' : 'text-white/40'}`}>{t.returns_enabled ? "Enabled" : "Disabled"}</div>
+                                          )}
+                                        </div>
+
+                                        <div className="flex flex-col gap-2">
+                                          <label className="text-[10px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">Cancel</label>
+                                          {editingLimits?.tenant_id === t.tenant_id ? (
+                                            <select className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[12px] text-white outline-none focus:border-brand" 
+                                              value={editingLimits.cancellations_enabled ? "yes" : "no"} onChange={(e) => setEditingLimits({...editingLimits, cancellations_enabled: e.target.value === "yes"})} >
+                                              <option value="yes">Enabled</option>
+                                              <option value="no">Disabled</option>
+                                            </select>
+                                          ) : (
+                                            <div className={`text-[13px] font-semibold ${t.cancellations_enabled ? 'text-rose-400' : 'text-white/40'}`}>{t.cancellations_enabled ? "Enabled" : "Disabled"}</div>
+                                          )}
+                                        </div>
                                       </div>
 
                                       <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">Allow Returns</label>
+                                        <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider flex items-center gap-1.5">Required Fields (Comma Separated)</label>
                                         {editingLimits?.tenant_id === t.tenant_id ? (
-                                          <input type="checkbox" className="w-4 h-4 accent-orange-500 cursor-pointer" 
-                                            checked={editingLimits.returns_enabled} onChange={(e) => setEditingLimits({...editingLimits, returns_enabled: e.target.checked})} />
-                                        ) : (
-                                          <div className={`text-[12px] font-semibold ${t.returns_enabled ? 'text-orange-400' : 'text-white/40'}`}>{t.returns_enabled ? "Yes" : "No"}</div>
-                                        )}
-                                      </div>
-
-                                      <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center gap-1.5">Allow Cancellations</label>
-                                        {editingLimits?.tenant_id === t.tenant_id ? (
-                                          <input type="checkbox" className="w-4 h-4 accent-red-500 cursor-pointer" 
-                                            checked={editingLimits.cancellations_enabled} onChange={(e) => setEditingLimits({...editingLimits, cancellations_enabled: e.target.checked})} />
-                                        ) : (
-                                          <div className={`text-[12px] font-semibold ${t.cancellations_enabled ? 'text-red-400' : 'text-white/40'}`}>{t.cancellations_enabled ? "Yes" : "No"}</div>
-                                        )}
-                                      </div>
-
-                                      <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
-                                        <label className="text-[10px] font-bold text-brand uppercase tracking-wider flex items-center gap-1.5">Order Requirements (comma separated)</label>
-                                        {editingLimits?.tenant_id === t.tenant_id ? (
-                                          <input type="text" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[12px] text-white outline-none focus:border-brand" 
-                                            placeholder="e.g. Name, Address, Payment Method"
+                                          <input type="text" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-brand" 
+                                            placeholder="e.g. Name, Email, Address"
                                             value={editingLimits.order_requirements} onChange={(e) => setEditingLimits({...editingLimits, order_requirements: e.target.value})} />
                                         ) : (
-                                          <div className="text-[12px] text-white/60 truncate">{(t.order_requirements || []).join(", ") || "None"}</div>
+                                          <div className="text-[12px] text-white/60 font-mono bg-black/40 px-3 py-2 rounded-lg border border-white/5 truncate">
+                                            {(t.order_requirements || []).join(", ") || "No requirements"}
+                                          </div>
                                         )}
                                       </div>
                                     </div>
-                                  
-                                  <div>
-                                    {editingLimits?.tenant_id === t.tenant_id ? (
-                                      <div className="flex gap-2">
-                                        <button onClick={() => setEditingLimits(null)} className="px-3 py-1.5 text-[11px] font-bold text-white/40 hover:text-white transition-colors">CANCEL</button>
-                                        <button onClick={() => handleSaveLimits(t.tenant_id)} className="px-3 py-1.5 bg-brand text-white rounded-lg text-[11px] font-bold shadow-lg hover:bg-brand-deep transition-all">SAVE LIMITS</button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={() => setEditingLimits({ 
-                                        tenant_id: t.tenant_id, 
-                                        rate_limit_per_minute: t.rate_limit_per_minute || 25, 
-                                        retention_hours: t.retention_hours || 72,
-                                        orders_enabled: t.orders_enabled || false,
-                                        returns_enabled: t.returns_enabled || false,
-                                        cancellations_enabled: t.cancellations_enabled || false,
-                                        order_requirements: (t.order_requirements || []).join(", ")
-                                      })} className="px-3 py-1.5 border border-white/10 text-white/60 hover:text-white hover:bg-white/5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap">EDIT CONFIG</button>
-                                    )}
                                   </div>
                                 </div>
                               </div>

@@ -77,7 +77,11 @@ async def get_metrics():
                 "days_remaining": days_remaining if days_remaining > 0 else 0,
                 "bill": round(t_tokens * 0.0001 + 49.99, 2), # Base plan + usage
                 "rate_limit_per_minute": t.get("rate_limit_per_minute", 25),
-                "retention_hours": t.get("retention_hours", 72)
+                "retention_hours": t.get("retention_hours", 72),
+                "orders_enabled": t.get("orders_enabled", False),
+                "returns_enabled": t.get("returns_enabled", False),
+                "cancellations_enabled": t.get("cancellations_enabled", False),
+                "order_requirements": t.get("order_requirements", [])
             })
             total_docs += t_docs
             total_client_tokens += t_tokens
