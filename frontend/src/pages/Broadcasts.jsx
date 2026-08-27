@@ -168,9 +168,13 @@ Here is the raw data:
                 </label>
                 <button 
                   onClick={() => setShowPromptHelper(!showPromptHelper)}
-                  className="text-[11px] text-brand font-medium hover:underline flex items-center gap-1"
+                  className={`text-[11px] font-medium hover:underline flex items-center gap-1 transition-colors ${showPromptHelper ? 'text-white/40 hover:text-white' : 'text-brand'}`}
                 >
-                  <Sparkles size={12} /> Format with AI
+                  {showPromptHelper ? (
+                    <><X size={12} /> Close Helper</>
+                  ) : (
+                    <><Sparkles size={12} /> Format with AI</>
+                  )}
                 </button>
               </div>
 
