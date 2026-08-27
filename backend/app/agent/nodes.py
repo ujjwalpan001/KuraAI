@@ -645,9 +645,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
 
             elif name == "search_knowledge":
                 q = args.get("query") or ""
-                cat = args.get("category") or "all"
-                logger.info(f"[TOOL] search_knowledge(query={q!r}, category={cat!r})")
-                extra = search_knowledge_base(q, state["tenant_id"], category=cat)
+                logger.info(f"[TOOL] search_knowledge(query={q!r})")
+                extra = search_knowledge_base(q, state["tenant_id"])
                 existing = state.get("rag_chunks") or []
                 state["rag_chunks"] = existing + [c for c in extra if c not in existing]
                 result = {"results": extra[:3] if extra else "no additional info found"}

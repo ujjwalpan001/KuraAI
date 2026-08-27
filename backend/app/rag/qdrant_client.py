@@ -71,7 +71,7 @@ async def index_remove(ids: list[str]) -> None:
     except Exception as e:
         logger.warning(f"Qdrant index_remove failed: {e}")
 
-def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3, category: str = "all") -> list[str]:
+def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3) -> list[str]:
     """Semantic search over KNOWLEDGE docs, strictly tenant-scoped."""
     client = get_qdrant_client()
     if not client:
@@ -82,9 +82,6 @@ def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3, catego
         FieldCondition(key="type", match=MatchValue(value="knowledge"))
     ]
     
-    if category and category != "all":
-        must_conditions.append(FieldCondition(key="doc_type", match=MatchValue(value=category)))
-
     try:
         search_result = client.query(
             collection_name=_collection_name,

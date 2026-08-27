@@ -47,9 +47,10 @@ TOOLS = [
     {
         "name": "search_knowledge",
         "description": (
-            "Search the knowledge base for FACTUAL answers about pricing, subscription plans, policies, delivery, warranty, "
-            "showrooms, payment, or general FAQs (not a specific product photo). "
-            "Use for questions like 'what is the pricing', 'what are the plans', 'what is your return policy', 'how long is delivery'."
+            "Search the knowledge base for FACTUAL answers about pricing, subscription plans, services, products, features, policies, delivery, warranty, "
+            "showrooms, payment, or general FAQs. "
+            "Use for questions like 'what is the pricing', 'what are the plans', 'what services do you offer', 'what is your return policy'."
+            "ALWAYS use this tool BEFORE telling the user you don't know the answer or escalating."
         ),
         "parameters": {
             "type": "object",
@@ -57,11 +58,6 @@ TOOLS = [
                 "query": {
                     "type": "string",
                     "description": "Search query to find relevant knowledge base articles.",
-                },
-                "category": {
-                    "type": "string",
-                    "enum": ["all", "faq", "product", "pricing", "policy", "service", "document"],
-                    "description": "Optional category filter to restrict search to a specific document type. Default is 'all'.",
                 }
             },
             "required": ["query"],
