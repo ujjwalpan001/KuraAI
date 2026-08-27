@@ -15,7 +15,7 @@ export default function Broadcasts({ tenantId }) {
 
   useEffect(() => {
     if (!tenantId) return;
-    api.adminTenants().then(res => {
+    api.getTenants().then(res => {
       const t = res.tenants.find(t => t.tenant_id === tenantId);
       if (t) setTenantObj(t);
     }).catch(e => console.error("Failed to load tenant", e));

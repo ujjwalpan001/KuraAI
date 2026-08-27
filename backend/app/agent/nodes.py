@@ -407,6 +407,9 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             "Answer questions based on the knowledge base provided."
         )
 
+    prompt += "--- FORMATTING RULES ---\n"
+    prompt += "CRITICAL: Do NOT use markdown formatting like asterisks (*) for bold text. Your output must be plain text without any asterisks.\n\n"
+    
     prompt += "--- CORE INSTRUCTIONS ---\n"
     prompt += "You MUST strictly follow these instructions above all else:\n"
     prompt += identity
