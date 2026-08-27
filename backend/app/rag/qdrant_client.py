@@ -95,7 +95,7 @@ def search_knowledge_base(query: str, tenant_id: str, n_results: int = 3, catego
     
         chunks = []
         for hit in search_result:
-            if hit.score > 0.8:  # threshold (depending on metric)
+            if hit.score > 0.5:  # lowered threshold to catch valid semantic matches
                 chunks.append(hit.document)
         return chunks
     except Exception as e:
@@ -127,7 +127,7 @@ def search_catalog(query: str, tenant_id: str) -> dict | None:
 
     hit = search_result[0]
     # In Qdrant FastEmbed, score is cosine similarity (0 to 1 generally for normalized)
-    if hit.score < 0.75: # tune this
+    if hit.score < 0.55: # tune this
         return None
 
     meta = hit.metadata

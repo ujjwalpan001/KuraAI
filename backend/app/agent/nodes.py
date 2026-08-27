@@ -149,10 +149,10 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     ).to_list(None)
     state["catalog_names"] = [c["name"] for c in cat]
 
-    # Last 5 messages (oldest first)
+    # Last 20 messages (oldest first)
     msgs = await db.message_audit_log.find(
         {"session_id": state["session_id"]}
-    ).sort("timestamp", -1).limit(5).to_list(5)
+    ).sort("timestamp", -1).limit(20).to_list(20)
     state["chat_history"] = list(reversed(msgs))
 
     # RAG - Qdrant cloud is always ready
@@ -379,7 +379,12 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             prompt += "To place an order or booking for the customer, you MUST collect the following information from them first:\n"
             for r in reqs:
                 prompt += f"- {r}\n"
-            prompt += "Once you have collected ALL this information, call the `place_order` tool.\n"
+            prompt += (
+                "CRITICAL INSTRUCTION: You MUST ask for these details ONE BY ONE in a natural conversational flow. "
+                "Do NOT ask for all the details at once in a single message. "
+                "Ask for the first missing detail, wait for their reply, then ask for the next, until you have all of them.\n"
+                "Once you have collected ALL this information, call the `place_order` tool.\n"
+            )
             
             if tenant.get("returns_enabled"):
                 prompt += f"IMPORTANT: This store has a strict {tenant.get('return_days', 7)}-day return policy from the date of delivery/purchase.\n"
@@ -675,7 +680,11 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 except Exception as e:
                     logger.warning(f"Failed to send admin order notification: {e}")
                     
-                result = {"status": "success", "message": f"Order saved successfully. The order ID is {order_id_str}. Please generate a friendly confirmation reply and give the customer their Order ID."}
+                msg_suffix = ""
+                if tenant.get("payment_details"):
+                    msg_suffix = f"\n\nCRITICAL: The store has payment methods configured. You MUST now ask the customer if they want to pay for their order now (e.g. 'Would you like to pay now?'). If they say yes, give them these payment details: {tenant.get('payment_details')}. If the customer asks for a QR code, or if you want to proactively send a payment QR code, use the get_media tool with the exact keyword 'payment_qr'."
+
+                result = {"status": "success", "message": f"Order saved successfully. The order ID is {order_id_str}. Please generate a friendly confirmation reply and give the customer their Order ID.{msg_suffix}"}
 
             elif name == "submit_payment_proof":
                 txn_id = args.get("transaction_id") or ""

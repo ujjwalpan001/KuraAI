@@ -20,6 +20,7 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
   const [cancellationCutoff, setCancellationCutoff] = useState(tenantObj?.cancellation_cutoff_status || "SHIPPED");
   const [cancellationHours, setCancellationHours] = useState(tenantObj?.cancellation_hours ?? 24);
   const [ownerNumber, setOwnerNumber] = useState(tenantObj?.owner_number || "");
+  const [paymentDetails, setPaymentDetails] = useState(tenantObj?.payment_details || "");
   const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -29,6 +30,7 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
       setCancellationCutoff(tenantObj.cancellation_cutoff_status || "SHIPPED");
       setCancellationHours(tenantObj.cancellation_hours ?? 24);
       setOwnerNumber(tenantObj.owner_number || "");
+      setPaymentDetails(tenantObj.payment_details || "");
     }
   }, [tenantObj]);
 
@@ -99,7 +101,8 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
         return_days: returnDays,
         cancellation_cutoff_status: cancellationCutoff,
         cancellation_hours: cancellationHours,
-        owner_number: ownerNumber
+        owner_number: ownerNumber,
+        payment_details: paymentDetails
       });
       if (onTenantsChanged) await onTenantsChanged();
       alert("Order policies updated successfully!");
@@ -295,6 +298,21 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
                 </div>
               </div>
             )}
+            
+            <div className="w-full border-t border-hair pt-6 mt-2">
+              <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Payment Details & Instructions</label>
+              <textarea 
+                value={paymentDetails}
+                onChange={e => setPaymentDetails(e.target.value)}
+                placeholder="e.g. Please pay via eSewa / Khalti to 98XXXXXXXX. Or use Bank Transfer: Nabil Bank, A/C: 1234..."
+                className="w-full bg-canvas border border-hair rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-brand transition-colors custom-scrollbar" 
+                rows="3"
+              />
+              <p className="text-[11px] text-muted mt-2">
+                The AI will automatically ask the user if they want to pay after placing an order and provide these details. <br/>
+                <span className="font-bold text-brand">Tip:</span> To automatically send a Payment QR code, upload it to the <b>Media Library</b> and name it exactly <code className="bg-canvas px-1 rounded border border-hair text-ink">payment_qr</code>.
+              </p>
+            </div>
             
             <div className="pt-4 border-t border-hair flex justify-start">
               <button 
