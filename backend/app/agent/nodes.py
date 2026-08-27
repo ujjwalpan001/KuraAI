@@ -10,7 +10,7 @@ from app.agent.state import AgentState
 from app.agent.tools import TOOLS
 from app.config import settings
 from app.db.mongodb import get_db
-from app.rag.qdrant_client import search_knowledge_base, search_catalog
+from app.rag.vector_client import search_knowledge_base, search_catalog
 from app.whatsapp import client as wa
 
 logger = logging.getLogger(__name__)

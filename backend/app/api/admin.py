@@ -16,7 +16,7 @@ from app.config import settings
 from app.db.mongodb import get_db
 from app.api.auth import require_user
 from app.storage import gridfs
-from app.rag.qdrant_client import build_chroma_index, index_upsert, index_remove, catalog_doc_text
+from app.rag.vector_client import build_chroma_index, index_upsert, index_remove, catalog_doc_text
 from app.whatsapp import client as wa_client
 
 router = APIRouter(prefix="/api/admin")

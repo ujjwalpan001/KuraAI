@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     google_client_id: str = ""
 
     # Cloud Services
-    qdrant_url: str = ""
-    qdrant_api_key: str = ""
+    upstash_vector_rest_url: str = ""
+    upstash_vector_rest_token: str = ""
     cloudinary_url: str = ""
     redis_url: str = ""
 
