@@ -654,6 +654,17 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             elif name == "escalate_to_human":
                 logger.info("[TOOL] escalate_to_human -> NEEDS_HUMAN")
                 state["session_status"] = "NEEDS_HUMAN"
+                
+                owner_number = tenant.get("owner_number")
+                if owner_number:
+                    cust_phone = state.get("customer_phone", "")
+                    alert_text = f"🚨 *Human Escalation Alert*\n\nCustomer *{cust_phone}* has requested human assistance. Please log into the dashboard or reply directly from this WhatsApp number to take over."
+                    try:
+                        import asyncio
+                        asyncio.create_task(wa.send_text_message(tenant["evolution_instance"], owner_number, alert_text))
+                    except Exception as e:
+                        logger.error(f"Failed to send escalation alert to owner: {e}")
+
                 result = {"status": "escalated"}
 
             elif name == "save_customer_detail":
