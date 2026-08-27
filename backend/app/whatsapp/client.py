@@ -116,12 +116,15 @@ async def send_typing_indicator(instance_name: str, to: str) -> dict:
 
 async def create_instance(instance_name: str, webhook_url: str) -> dict:
     """Create a new WhatsApp instance on the Evolution API server."""
-    # Step 1: Create instance with instance_name acting as its own token
-    create_res = await _post_admin("/instance/create", {
-        "instanceName": instance_name,
-        "token": instance_name,
-        "qrcode": True
-    })
+    try:
+        create_res = await _post_admin("/instance/create", {
+            "instanceName": instance_name,
+            "token": instance_name,
+            "qrcode": True
+        })
+    except Exception as e:
+        print(f"Instance {instance_name} might already exist: {e}")
+        create_res = {"status": "Already exists"}
     
     # Step 2: Set webhook (Evolution API v1/v2 compat)
     try:
