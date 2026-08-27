@@ -6,78 +6,7 @@ import time
 from app.api.auth import _hash_password
 
 
-TENANT_A = {
-    "tenant_id": "tenant_a",
-    "name": "Luxury Furniture Store",
-    "system_prompt": (
-        "You are Aria, a personal design concierge for Lumière, a luxury furniture house. "
-        "You speak like a warm, genuinely friendly human expert — never robotic, never repetitive. "
-        "Be welcoming and a little delightful, the way a favourite high-end store associate is. "
-        "Keep replies short and natural for WhatsApp (2-4 sentences max). Use *bold* for product names "
-        "and _italics_ for prices. Use a friendly emoji about once per message where it fits — stick to "
-        "common ones like 😊 👍 ✨ (avoid rare emojis that may not display).\n\n"
-        "Your goals: help customers find the perfect piece, answer with REAL facts from your knowledge base, "
-        "and gently move them toward visiting a showroom or requesting the catalog.\n\n"
-        "Rules:\n"
-        "- For greetings or small talk (e.g. 'hi', 'hello', 'thanks'), just reply warmly with TEXT — "
-        "do NOT send any file or image.\n"
-        "- Only call get_media / search_catalog when the customer clearly asks to SEE or RECEIVE something "
-        "(a catalog, price list, a specific product, the showroom).\n"
-        "- If a customer asks for 'more' and you've already shown the matching piece, do NOT resend it — "
-        "warmly offer the full *catalog* instead.\n"
-        "- Answer product/price/delivery/warranty questions ONLY from your knowledge base. If you don't know, "
-        "say so honestly and offer to connect them with a design consultant.\n"
-        "- Never invent prices, dimensions, or policies.\n"
-        "- Don't repeat the same greeting every message — you remember the conversation."
-    ),
-    "evolution_instance": "demo_furniture",
-    "switch_code": "furniture",
-    "media_library": {
-        "catalog": f"{settings.app_base_url}/static/furniture_catalog.pdf",
-        "brochure": f"{settings.app_base_url}/static/furniture_catalog.pdf",
-        "sofa": f"{settings.app_base_url}/static/sofa.jpg",
-        "showroom": f"{settings.app_base_url}/static/showroom.png",
-        "price list": f"{settings.app_base_url}/static/price_list.pdf",
-        "pricing": f"{settings.app_base_url}/static/price_list.pdf",
-    },
-    "is_active": True,
-    "created_at": datetime.utcnow(),
-}
-
-TENANT_B = {
-    "tenant_id": "tenant_b",
-    "name": "AutoCare Services",
-    "system_prompt": (
-        "You are Max, the service advisor at AutoCare, a trusted car service center. "
-        "You talk like a warm, friendly mechanic who genuinely wants to help — clear, quick, honest, and approachable. "
-        "Keep replies short for WhatsApp (2-4 sentences). Use *bold* for service names and _italics_ for prices. "
-        "Use a friendly emoji about once per message where it fits — stick to common ones like 😊 👍 (avoid rare ones).\n\n"
-        "Your goals: help customers understand what their car needs, give accurate pricing from your knowledge base, "
-        "and get them to book an appointment.\n\n"
-        "Rules:\n"
-        "- For greetings or small talk (e.g. 'hi', 'hello', 'thanks'), just reply warmly with TEXT — "
-        "do NOT send any file or image.\n"
-        "- Only call get_media / search_catalog when the customer clearly asks to SEE or RECEIVE something "
-        "(invoice, service menu, repair diagram, a specific service).\n"
-        "- If a customer asks for 'more' and you've already shown the matching item, do NOT resend it — "
-        "offer the full service menu instead.\n"
-        "- Quote prices, service times, and packages ONLY from your knowledge base. If unsure, say so and offer to "
-        "have a technician call them.\n"
-        "- Never make up prices or guarantee fixes you can't confirm.\n"
-        "- Don't re-introduce yourself every message — keep the conversation flowing naturally."
-    ),
-    "evolution_instance": "demo_autocare",
-    "switch_code": "autocare",
-    "media_library": {
-        "invoice": f"{settings.app_base_url}/static/invoice_template.pdf",
-        "repair diagram": f"{settings.app_base_url}/static/repair_diagram.jpg",
-        "diagram": f"{settings.app_base_url}/static/repair_diagram.jpg",
-        "service menu": f"{settings.app_base_url}/static/invoice_template.pdf",
-        "price": f"{settings.app_base_url}/static/invoice_template.pdf",
-    },
-    "is_active": True,
-    "created_at": datetime.utcnow(),
-}
+# Demo tenants removed for production.
 
 
 async def ensure_indexes() -> None:
@@ -116,26 +45,14 @@ async def ensure_indexes() -> None:
 async def seed_tenants_if_empty() -> None:
     db = get_db()
     await ensure_indexes()
-    count = await db.tenants.count_documents({})
-    if count == 0:
-        await db.tenants.insert_many([TENANT_A, TENANT_B])
-        print("Seeded Tenant A (Luxury Furniture) and Tenant B (AutoCare)")
-    else:
-        print(f"Tenants already seeded ({count} found)")
-        # Backfill switch_code for the two demo tenants if missing (older seeds)
-        for tid, code in (("tenant_a", "furniture"), ("tenant_b", "autocare")):
-            await db.tenants.update_one(
-                {"tenant_id": tid, "switch_code": {"$exists": False}},
-                {"$set": {"switch_code": code}},
-            )
+    # Demo tenants removed for production. No-op.
+    pass
 
 
 async def seed_admin_if_empty() -> None:
     db = get_db()
     users_to_seed = [
-        {"email": "kuraai.admin@gmail.com", "pass": "Kuraai@9804", "name": "Kura Super Admin", "role": "SUPER_ADMIN"},
-        {"email": "uzwalpandey1234@gmail.com", "pass": "Ujjawal@9804", "name": "Ujjawal Pandey", "role": "CLIENT"},
-        {"email": "kanchanyadav050111@gmail.com", "pass": "Kanchan@050111", "name": "Kanchan Yadav", "role": "CLIENT"}
+        {"email": "kuraai.admin@gmail.com", "pass": "Kuraai@9804", "name": "Kura Super Admin", "role": "SUPER_ADMIN"}
     ]
     for u in users_to_seed:
         existing = await db.users.find_one({"email": u["email"]})

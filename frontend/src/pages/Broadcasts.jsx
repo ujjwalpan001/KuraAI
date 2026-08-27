@@ -162,9 +162,36 @@ Here is the raw data:
 
           <div className="space-y-5">
             <div>
-              <label className="flex items-center gap-2 text-[12px] font-semibold text-muted uppercase tracking-wider mb-2">
-                <Users size={14} /> Audience (Phone Numbers)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2 text-[12px] font-semibold text-muted uppercase tracking-wider">
+                  <Users size={14} /> Audience (Phone Numbers)
+                </label>
+                <button 
+                  onClick={() => setShowPromptHelper(!showPromptHelper)}
+                  className="text-[11px] text-brand font-medium hover:underline flex items-center gap-1"
+                >
+                  <Sparkles size={12} /> Format with AI
+                </button>
+              </div>
+
+              {showPromptHelper && (
+                <div className="mb-4 p-4 bg-brand/5 border border-brand/20 rounded-lg animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[12px] text-ink font-semibold">Copy this prompt into ChatGPT/Gemini to format your contacts:</p>
+                    <button 
+                      onClick={copyPrompt}
+                      className="text-[11px] px-2 py-1 bg-white border border-hair rounded text-ink hover:bg-canvas transition flex items-center gap-1"
+                    >
+                      {copiedPrompt ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                      {copiedPrompt ? "Copied!" : "Copy Prompt"}
+                    </button>
+                  </div>
+                  <pre className="text-[11px] text-muted whitespace-pre-wrap font-mono p-3 bg-white border border-hair rounded-md">
+                    {aiPrompt}
+                  </pre>
+                </div>
+              )}
+
               <textarea
                 value={phones}
                 onChange={(e) => setPhones(e.target.value)}
