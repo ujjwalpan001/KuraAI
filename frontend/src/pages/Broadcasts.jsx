@@ -175,18 +175,18 @@ Here is the raw data:
               </div>
 
               {showPromptHelper && (
-                <div className="mb-4 p-4 bg-brand/5 border border-brand/20 rounded-lg animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[12px] text-ink font-semibold">Copy this prompt into ChatGPT/Gemini to format your contacts:</p>
+                <div className="mb-4 p-4 bg-brand/5 border border-brand/20 rounded-xl animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[12px] text-brand/80 font-semibold">Copy this prompt into ChatGPT or Gemini:</p>
                     <button 
                       onClick={copyPrompt}
-                      className="text-[11px] px-2 py-1 bg-white border border-hair rounded text-ink hover:bg-canvas transition flex items-center gap-1"
+                      className="text-[11px] px-3 py-1.5 bg-brand/10 border border-brand/20 rounded-lg text-brand hover:bg-brand/20 transition flex items-center gap-1.5 font-bold shadow-sm"
                     >
-                      {copiedPrompt ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-                      {copiedPrompt ? "Copied!" : "Copy Prompt"}
+                      {copiedPrompt ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      {copiedPrompt ? "Copied!" : "Copy"}
                     </button>
                   </div>
-                  <pre className="text-[11px] text-muted whitespace-pre-wrap font-mono p-3 bg-white border border-hair rounded-md">
+                  <pre className="text-[11px] text-white/60 whitespace-pre-wrap font-mono p-4 bg-black/40 border border-white/5 rounded-xl custom-scrollbar max-h-48 overflow-y-auto leading-relaxed shadow-inner">
                     {aiPrompt}
                   </pre>
                 </div>
