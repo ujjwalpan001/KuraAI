@@ -117,14 +117,16 @@ async def send_typing_indicator(instance_name: str, to: str) -> dict:
 async def create_instance(instance_name: str, webhook_url: str) -> dict:
     """Create a new WhatsApp instance on the Evolution API server."""
     try:
+        # Evolution Go expects only instanceName and token. 
+        # Extra fields like 'qrcode' can cause 400 Bad Request if strict JSON decoding is enabled.
         create_res = await _post_admin("/instance/create", {
             "instanceName": instance_name,
-            "token": instance_name,
-            "qrcode": True
+            "token": instance_name
         })
     except Exception as e:
-        print(f"Instance {instance_name} might already exist: {e}")
-        create_res = {"status": "Already exists"}
+        error_body = getattr(getattr(e, 'response', None), 'text', 'No response body')
+        print(f"Instance {instance_name} creation failed: {e} | Body: {error_body}")
+        create_res = {"status": "Already exists", "error": error_body}
     
     # Step 2: Set webhook (Evolution API v1/v2 compat)
     try:
