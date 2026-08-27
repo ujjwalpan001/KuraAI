@@ -200,3 +200,101 @@ async def broadcast(req: BroadcastRequest):
             results["failed"].append({"phone": phone, "error": str(e)})
 
     return results
+
+@router.get("/api/tenants/{tenant_id}/orders")
+async def list_orders(tenant_id: str, user: dict = Depends(require_user)):
+    db = get_db()
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized to access this tenant")
+            
+    orders = await db.orders.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(None)
+    for o in orders:
+        o["_id"] = str(o["_id"])
+        if o.get("created_at"):
+            o["created_at"] = o["created_at"].isoformat()
+    return {"orders": orders}
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+from bson import ObjectId
+
+@router.put("/api/orders/{order_id}/status")
+async def update_order_status(order_id: str, body: OrderStatusUpdate, user: dict = Depends(require_user)):
+    db = get_db()
+    try:
+        oid = ObjectId(order_id)
+    except Exception:
+        raise HTTPException(400, "Invalid order ID")
+        
+    order = await db.orders.find_one({"_id": oid})
+    if not order:
+        raise HTTPException(404, "Order not found")
+        
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized")
+            
+    await db.orders.update_one({"_id": oid}, {"$set": {"status": body.status}})
+    
+    # Automated Customer Notification
+    if body.status in ["SHIPPED", "DELIVERED"]:
+        tenant = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
+        if tenant:
+            instance_name = tenant.get("evolution_instance", "default")
+            cust_phone = order.get("customer_phone")
+            order_id_str = order.get("order_id", "Unknown")
+            if body.status == "SHIPPED":
+                msg = f"🚚 *Good news!* Your order {order_id_str} has just been SHIPPED and is on its way to you!"
+            else:
+                msg = f"✅ *Delivered!* Your order {order_id_str} has been marked as DELIVERED. Thank you for your business!"
+            
+            try:
+                import app.whatsapp.client as wa
+                await wa.send_text_message(instance_name, cust_phone, msg)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to send shipping notification: {e}")
+                
+    return {"ok": True}
+
+class PaymentStatusUpdate(BaseModel):
+    payment_status: str
+
+@router.put("/api/orders/{order_id}/payment-status")
+async def update_payment_status(order_id: str, body: PaymentStatusUpdate, user: dict = Depends(require_user)):
+    db = get_db()
+    try:
+        oid = ObjectId(order_id)
+    except Exception:
+        raise HTTPException(400, "Invalid order ID")
+        
+    order = await db.orders.find_one({"_id": oid})
+    if not order:
+        raise HTTPException(404, "Order not found")
+        
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized")
+            
+    await db.orders.update_one({"_id": oid}, {"$set": {"payment_status": body.payment_status}})
+    
+    # Send confirmation to user if verified
+    if body.payment_status == "VERIFIED":
+        try:
+            tenant_doc = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
+            instance_name = (tenant_doc.get("evolution_instance") or "default")
+            import app.whatsapp.client as wa
+            await wa.send_text_message(
+                instance_name, 
+                order["customer_phone"], 
+                f"✅ *Payment Verified!*\n\nYour payment for {order.get('product_name')} has been successfully verified by our finance department. Your order is now processing!"
+            )
+        except Exception as e:
+            print(f"Failed to send payment verification whatsapp: {e}")
+            
+    return {"ok": True}

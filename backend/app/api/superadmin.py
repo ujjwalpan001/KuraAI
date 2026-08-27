@@ -164,17 +164,32 @@ async def delete_client(user_id: str):
 class TenantLimitsIn(BaseModel):
     rate_limit_per_minute: int
     retention_hours: int
+    orders_enabled: bool | None = None
+    order_requirements: list[str] | None = None
+    returns_enabled: bool | None = None
+    cancellations_enabled: bool | None = None
 
 @router.put("/tenants/{tenant_id}/limits")
 async def update_tenant_limits(tenant_id: str, body: TenantLimitsIn):
-    """Update global rate limit and message retention for a specific tenant."""
+    """Update global rate limit, message retention, and order flow features for a specific tenant."""
     db = get_db()
+    
+    update_data = {
+        "rate_limit_per_minute": body.rate_limit_per_minute,
+        "retention_hours": body.retention_hours
+    }
+    if body.orders_enabled is not None:
+        update_data["orders_enabled"] = body.orders_enabled
+    if body.order_requirements is not None:
+        update_data["order_requirements"] = body.order_requirements
+    if body.returns_enabled is not None:
+        update_data["returns_enabled"] = body.returns_enabled
+    if body.cancellations_enabled is not None:
+        update_data["cancellations_enabled"] = body.cancellations_enabled
+        
     res = await db.tenants.update_one(
         {"tenant_id": tenant_id},
-        {"$set": {
-            "rate_limit_per_minute": body.rate_limit_per_minute,
-            "retention_hours": body.retention_hours
-        }}
+        {"$set": update_data}
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Tenant not found")

@@ -372,6 +372,22 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             )
         prompt += f"{master_prompt}\n\n"
 
+    if tenant.get("orders_enabled"):
+        reqs = tenant.get("order_requirements") or []
+        if reqs:
+            prompt += "--- ORDER PROCESSING INSTRUCTIONS ---\n"
+            prompt += "To place an order or booking for the customer, you MUST collect the following information from them first:\n"
+            for r in reqs:
+                prompt += f"- {r}\n"
+            prompt += "Once you have collected ALL this information, call the `place_order` tool.\n"
+            
+            if tenant.get("returns_enabled"):
+                prompt += f"IMPORTANT: This store has a strict {tenant.get('return_days', 7)}-day return policy from the date of delivery/purchase.\n"
+            if tenant.get("cancellations_enabled"):
+                prompt += f"IMPORTANT: Cancellations are only allowed within {tenant.get('cancellation_hours', 24)} hours of order placement, provided the order is not shipped.\n"
+                
+            prompt += "--- END ORDER PROCESSING ---\n\n"
+
     name = tenant.get("name", "this business")
     identity = (
         f"You are the official AI virtual assistant for '{name}'. "
@@ -489,12 +505,24 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
         state["llm_reply"] = "I'm here to help! Could you tell me a bit more about what you're looking for?"
         return state
 
+    # Filter available tools based on tenant config
+    active_groq_tools = []
+    for gt in _groq_tools:
+        name = gt["function"]["name"]
+        if name == "place_order" and not tenant.get("orders_enabled"):
+            continue
+        if name == "initiate_return" and not tenant.get("returns_enabled"):
+            continue
+        if name == "cancel_order" and not tenant.get("cancellations_enabled"):
+            continue
+        active_groq_tools.append(gt)
+
     try:
         resp = await _groq_create(
             groq,
             model=settings.groq_model,
             messages=messages,
-            tools=_groq_tools,
+            tools=active_groq_tools,
             tool_choice="auto",
             temperature=0.4,
             max_tokens=500,
@@ -605,6 +633,174 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 state["session_status"] = "NEEDS_HUMAN"
                 result = {"status": "escalated"}
 
+            elif name == "place_order":
+                product = args.get("product_name") or ""
+                qty = args.get("quantity") or 1
+                try:
+                    info = json.loads(args.get("collected_info") or "{}")
+                except Exception:
+                    info = {"raw": args.get("collected_info")}
+                logger.info(f"[TOOL] place_order(product={product!r}, info={info})")
+                
+                order_id_str = f"ORD-{str(uuid4())[:6].upper()}"
+                
+                db = get_db()
+                order_doc = {
+                    "tenant_id": state["tenant_id"],
+                    "session_id": state["session_id"],
+                    "customer_phone": state["customer_phone"],
+                    "order_id": order_id_str,
+                    "product_name": product,
+                    "quantity": qty,
+                    "collected_info": info,
+                    "status": "PENDING",
+                    "created_at": datetime.utcnow()
+                }
+                await db.orders.insert_one(order_doc)
+                
+                # Send notification to admin
+                try:
+                    admin_numbers = tenant.get("personal_numbers") or []
+                    if admin_numbers:
+                        instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
+                        notif_msg = f"🛒 *NEW ORDER RECEIVED!*\n\n*ID:* {order_id_str}\n*Product:* {product} (x{qty})\n*Customer:* {state['customer_phone']}\n*Details:* {json.dumps(info, indent=2)}\n\n_Check your dashboard to manage this order._"
+                        for number in admin_numbers:
+                            import app.whatsapp.client as wa
+                            await wa.send_text_message(instance_name, number, notif_msg)
+                except Exception as e:
+                    logger.warning(f"Failed to send admin order notification: {e}")
+                    
+                result = {"status": "success", "message": f"Order saved successfully. The order ID is {order_id_str}. Please generate a friendly confirmation reply and give the customer their Order ID."}
+
+            elif name == "submit_payment_proof":
+                txn_id = args.get("transaction_id") or ""
+                logger.info(f"[TOOL] submit_payment_proof(txn={txn_id!r})")
+                db = get_db()
+                
+                # Find the most recent PENDING order for this customer
+                recent_order = await db.orders.find_one(
+                    {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"], "status": "PENDING"},
+                    sort=[("created_at", -1)]
+                )
+                
+                if recent_order:
+                    await db.orders.update_one(
+                        {"_id": recent_order["_id"]},
+                        {"$set": {
+                            "payment_status": "VERIFICATION_PENDING",
+                            "payment_proof": txn_id
+                        }}
+                    )
+                    
+                    # Notify admin
+                    try:
+                        admin_numbers = tenant.get("personal_numbers") or []
+                        if admin_numbers:
+                            instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
+                            notif_msg = f"💳 *PAYMENT PROOF SUBMITTED!*\n\n*Customer:* {state['customer_phone']}\n*Order:* {recent_order.get('product_name')}\n*Proof:* {txn_id}\n\n_Please check your dashboard to verify this payment._"
+                            for number in admin_numbers:
+                                import app.whatsapp.client as wa
+                                await wa.send_text_message(instance_name, number, notif_msg)
+                    except Exception as e:
+                        logger.warning(f"Failed to send admin payment notification: {e}")
+                        
+                    result = {"status": "success", "message": "Payment proof attached to order. Tell the customer it's sent to finance for verification."}
+                else:
+                    result = {"status": "error", "message": "No pending orders found for this customer."}
+
+            elif name == "initiate_return":
+                target_order_id = args.get("order_id") or ""
+                reason = args.get("reason") or ""
+                logger.info(f"[TOOL] initiate_return(order_id={target_order_id!r}, reason={reason!r})")
+                
+                db = get_db()
+                order = await db.orders.find_one({"tenant_id": state["tenant_id"], "order_id": target_order_id.strip()})
+                
+                if not order:
+                    result = {"status": "error", "message": "Order not found. Ask the customer to verify the Order ID."}
+                else:
+                    days_since_purchase = (datetime.utcnow() - order.get("created_at", datetime.utcnow())).days
+                    return_days = tenant.get("return_days", 7)
+                    if days_since_purchase > return_days:
+                        result = {"status": "error", "message": f"Return rejected. Order was placed {days_since_purchase} days ago (exceeds {return_days}-day return policy)."}
+                    else:
+                        await db.orders.update_one(
+                            {"_id": order["_id"]},
+                            {"$set": {"status": "RETURN_REQUESTED", "return_reason": reason}}
+                        )
+                        # Notify admin
+                        try:
+                            admin_numbers = tenant.get("personal_numbers") or []
+                            if admin_numbers:
+                                instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
+                                notif_msg = f"⚠️ *RETURN REQUESTED!*\n\n*Order ID:* {target_order_id}\n*Customer:* {state['customer_phone']}\n*Reason:* {reason}\n\n_Please check your dashboard to process the return._"
+                                for number in admin_numbers:
+                                    import app.whatsapp.client as wa
+                                    await wa.send_text_message(instance_name, number, notif_msg)
+                        except Exception as e:
+                            logger.warning(f"Failed to send admin return notification: {e}")
+                            
+                        result = {"status": "success", "message": "Return request initiated successfully. Inform the customer."}
+
+            elif name == "check_order_status":
+                target_order_id = args.get("order_id") or ""
+                db = get_db()
+                if target_order_id:
+                    order = await db.orders.find_one({"tenant_id": state["tenant_id"], "order_id": target_order_id.strip()})
+                else:
+                    # Find the most recent order for this customer
+                    order = await db.orders.find_one(
+                        {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"]},
+                        sort=[("created_at", -1)]
+                    )
+                
+                if not order:
+                    result = {"status": "error", "message": "No order found. Ask the customer if they have an Order ID."}
+                else:
+                    result = {
+                        "status": "success",
+                        "order_id": order.get("order_id"),
+                        "product_name": order.get("product_name"),
+                        "current_status": order.get("status"),
+                        "payment_status": order.get("payment_status")
+                    }
+
+            elif name == "cancel_order":
+                target_order_id = args.get("order_id") or ""
+                db = get_db()
+                order = await db.orders.find_one({"tenant_id": state["tenant_id"], "order_id": target_order_id.strip()})
+                
+                if not order:
+                    result = {"status": "error", "message": "Order not found. Ask the customer to verify the Order ID."}
+                else:
+                    # Check status
+                    if order.get("status") not in ["PENDING", "PROCESSING"]:
+                        result = {"status": "error", "message": f"Order cannot be cancelled because its status is {order.get('status')}. Cancellations are only allowed for PENDING or PROCESSING orders."}
+                    else:
+                        # Check time limit
+                        hours_since_purchase = (datetime.utcnow() - order.get("created_at", datetime.utcnow())).total_seconds() / 3600
+                        cancellation_hours = tenant.get("cancellation_hours", 24)
+                        if hours_since_purchase > cancellation_hours:
+                            result = {"status": "error", "message": f"Cancellation rejected. Order was placed {int(hours_since_purchase)} hours ago (exceeds {cancellation_hours}-hour cancellation policy)."}
+                        else:
+                            await db.orders.update_one(
+                                {"_id": order["_id"]},
+                                {"$set": {"status": "CANCELLED"}}
+                            )
+                            # Notify admin
+                            try:
+                                admin_numbers = tenant.get("personal_numbers") or []
+                                if admin_numbers:
+                                    instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
+                                    notif_msg = f"❌ *ORDER CANCELLED!*\n\n*Order ID:* {target_order_id}\n*Customer:* {state['customer_phone']}\n\n_The customer successfully cancelled this order._"
+                                    for number in admin_numbers:
+                                        import app.whatsapp.client as wa
+                                        await wa.send_text_message(instance_name, number, notif_msg)
+                            except Exception as e:
+                                logger.warning(f"Failed to send admin cancel notification: {e}")
+                            
+                            result = {"status": "success", "message": "Order cancelled successfully. Inform the customer."}
+
             messages.append({
                 "role": "tool", "tool_call_id": tc.id, "name": name,
                 "content": json.dumps(result),
@@ -636,7 +832,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 if status == "not_found":
                     needs_llm_call2 = True  # LLM handles "I don't have that"
                 # status == "sent" → template handles it ✅
-            elif name in ("search_catalog", "search_knowledge", "escalate_to_human"):
+            elif name in ("search_catalog", "search_knowledge", "escalate_to_human", "place_order", "submit_payment_proof", "initiate_return"):
                 needs_llm_call2 = True  # These always need natural language
         
         if needs_llm_call2:

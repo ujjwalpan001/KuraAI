@@ -16,7 +16,8 @@ import {
   Bot,
   ShieldAlert,
   Building,
-  MonitorPlay
+  MonitorPlay,
+  ShoppingCart
 } from "lucide-react";
 import { getUser, getUserRole, logout, api } from "../api/client";
 
@@ -36,13 +37,25 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
   const role = getUserRole();
   const initials = (user?.name || "Admin").slice(0, 2).toUpperCase();
 
-  const navItems = role === "SUPER_ADMIN" 
-    ? [
+  const activeTenantObj = tenants?.find(t => t.tenant_id === activeTenant);
+  
+  let navItems = NAVIGATION;
+  if (role === "SUPER_ADMIN") {
+    navItems = [
         { id: "sa-overview", label: "Overview", icon: LayoutDashboard },
         { id: "sa-clients", label: "Clients & Billing", icon: Building },
         { id: "sa-settings", label: "CMS Settings", icon: MonitorPlay }
-      ]
-    : NAVIGATION;
+    ];
+  } else {
+    // Inject orders if enabled
+    if (activeTenantObj?.orders_enabled) {
+      navItems = [
+        ...NAVIGATION.slice(0, 2),
+        { id: "orders", label: "Orders", icon: ShoppingCart },
+        ...NAVIGATION.slice(2)
+      ];
+    }
+  }
 
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
   

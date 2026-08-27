@@ -177,8 +177,6 @@ export default function DashboardOverview({ tenantId }) {
           </div>
           
           <button className="w-full mt-6 py-3 rounded-xl bg-white/[0.03] border border-white/10 text-[13px] font-semibold text-white/70 hover:bg-white/[0.08] hover:text-white transition-all relative z-10 backdrop-blur-sm">
-            View All Logs
-          </button>
         </div>
       </div>
     </div>

@@ -92,6 +92,8 @@ class TenantIn(BaseModel):
     media_library: dict[str, str] = {}
     personal_numbers: list[str] = []
     rate_limit_per_minute: int = 25
+    return_days: int = 7
+    cancellation_hours: int = 24
 
 
 @router.get("/tenants")

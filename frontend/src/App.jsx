@@ -8,6 +8,7 @@ import DashboardOverview from "./pages/DashboardOverview";
 import LiveChats from "./pages/LiveChats";
 import Analytics from "./pages/Analytics";
 import Broadcasts from "./pages/Broadcasts";
+import Orders from "./pages/Orders";
 import MediaLibrary from "./pages/MediaLibrary";
 import TenantManagement from "./pages/TenantManagement";
 import Landing from "./pages/Landing";
@@ -52,9 +53,11 @@ function Console() {
   const renderPage = () => {
     switch (view) {
       case "overview":
-        return <DashboardOverview tenantId={activeTenant} />;
+        return <DashboardOverview tenantId={activeTenant} tenantObj={activeTenantObj} onTenantsChanged={loadTenants} />;
       case "live-chats":
         return <LiveChats tenantId={activeTenant} />;
+      case "orders":
+        return <Orders tenantId={activeTenant} tenantObj={activeTenantObj} onTenantsChanged={loadTenants} />;
       case "broadcasts":
         return <Broadcasts tenantId={activeTenant} />;
       case "media-library":

@@ -169,5 +169,10 @@ export const api = {
   addAdmin: (data) => send("/api/superadmin/admins", "POST", data),
   removeAdmin: (username) => send(`/api/superadmin/admins/${username}`, "DELETE"),
   getGlobalSettings: () => get("/api/superadmin/global_settings"),
-  updateGlobalSettings: (data) => send("/api/superadmin/global_settings", "PUT", data)
+  updateGlobalSettings: (data) => send("/api/superadmin/global_settings", "PUT", data),
+  
+  // Orders
+  getOrders: (tenantId) => get(`/api/tenants/${tenantId}/orders`),
+  updateOrderStatus: (orderId, status) => send(`/api/orders/${orderId}/status`, "PUT", { status }),
+  verifyPayment: (orderId) => send(`/api/orders/${orderId}/payment-status`, "PUT", { payment_status: "VERIFIED" })
 };
