@@ -17,15 +17,38 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [returnDays, setReturnDays] = useState(tenantObj?.return_days ?? 7);
+  const [cancellationCutoff, setCancellationCutoff] = useState(tenantObj?.cancellation_cutoff_status || "SHIPPED");
   const [cancellationHours, setCancellationHours] = useState(tenantObj?.cancellation_hours ?? 24);
   const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     if (tenantObj) {
       setReturnDays(tenantObj.return_days ?? 7);
+      setCancellationCutoff(tenantObj.cancellation_cutoff_status || "SHIPPED");
       setCancellationHours(tenantObj.cancellation_hours ?? 24);
     }
   }, [tenantObj]);
+
+  const dynamicStatuses = (() => {
+    if (tenantObj?.custom_statuses && tenantObj.custom_statuses.length > 0) {
+      return tenantObj.custom_statuses.map((status, index) => {
+        const standard = STATUSES.find(s => s.id === status || s.label.toUpperCase() === status.toUpperCase());
+        if (standard) return standard;
+        
+        const colors = [
+          { color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+          { color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20" },
+          { color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+          { color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+          { color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20" }
+        ];
+        const c = colors[index % colors.length];
+        
+        return { id: status, label: status, icon: Package, color: c.color, bg: c.bg, border: c.border };
+      });
+    }
+    return STATUSES;
+  })();
 
   useEffect(() => {
     if (!tenantId) return;
@@ -71,6 +94,7 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
       await api.updateTenant(tenantId, { 
         ...tenantObj, 
         return_days: returnDays,
+        cancellation_cutoff_status: cancellationCutoff,
         cancellation_hours: cancellationHours
       });
       if (onTenantsChanged) await onTenantsChanged();
@@ -107,7 +131,7 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
       </div>
 
       <div className="flex-1 flex gap-6 overflow-x-auto pb-4 custom-scrollbar">
-        {STATUSES.map(col => {
+        {dynamicStatuses.map(col => {
           const colOrders = filteredOrders.filter(o => o.status === col.id);
           
           return (
@@ -182,7 +206,7 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
                           value={order.status}
                           onChange={(e) => updateStatus(order._id, e.target.value)}
                         >
-                          {STATUSES.map(s => (
+                          {dynamicStatuses.map(s => (
                             <option key={s.id} value={s.id}>Move to {s.label}</option>
                           ))}
                         </select>
@@ -217,16 +241,31 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
             )}
 
             {tenantObj?.cancellations_enabled && (
-              <div className="w-full md:w-1/3">
-                <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Cancellation Window (Hours)</label>
-                <input 
-                  type="number"
-                  min="0"
-                  value={cancellationHours}
-                  onChange={e => setCancellationHours(parseInt(e.target.value) || 0)}
-                  className="w-full bg-canvas border border-hair rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-brand transition-colors font-mono" 
-                />
-                <p className="text-[11px] text-muted mt-2">Hours allowed for cancellation after placing order.</p>
+              <div className="w-full md:w-1/2 flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">No Cancellations After (Status)</label>
+                  <select 
+                    value={cancellationCutoff}
+                    onChange={e => setCancellationCutoff(e.target.value)}
+                    className="w-full bg-canvas border border-hair rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-brand transition-colors font-mono" 
+                  >
+                    {dynamicStatuses.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted mt-2">Cannot cancel past this point.</p>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Time Window (Hours)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    value={cancellationHours}
+                    onChange={e => setCancellationHours(parseInt(e.target.value) || 0)}
+                    className="w-full bg-canvas border border-hair rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-brand transition-colors font-mono" 
+                  />
+                  <p className="text-[11px] text-muted mt-2">Max hours after order placement.</p>
+                </div>
               </div>
             )}
             

@@ -100,7 +100,10 @@ export default function SuperAdmin({ user, activeTab }) {
         orders_enabled: !!editingLimits.orders_enabled,
         order_requirements: reqs,
         returns_enabled: !!editingLimits.returns_enabled,
-        cancellations_enabled: !!editingLimits.cancellations_enabled
+        cancellations_enabled: !!editingLimits.cancellations_enabled,
+        cancellation_hours: parseInt(editingLimits.cancellation_hours) || 24,
+        custom_statuses: editingLimits.custom_statuses ? editingLimits.custom_statuses.split(",").map(s => s.trim()).filter(s => s) : null,
+        cancellation_cutoff_status: editingLimits.cancellation_cutoff_status || "SHIPPED"
       });
       setEditingLimits(null);
       loadData();
@@ -450,7 +453,10 @@ export default function SuperAdmin({ user, activeTab }) {
                                           orders_enabled: t.orders_enabled || false,
                                           returns_enabled: t.returns_enabled || false,
                                           cancellations_enabled: t.cancellations_enabled || false,
-                                          order_requirements: (t.order_requirements || []).join(", ")
+                                          order_requirements: (t.order_requirements || []).join(", "),
+                                          custom_statuses: (t.custom_statuses || []).join(", "),
+                                          cancellation_cutoff_status: t.cancellation_cutoff_status || "SHIPPED",
+                                          cancellation_hours: t.cancellation_hours || 24
                                         })} className="px-3 py-1.5 border border-white/10 text-white/60 hover:text-white hover:bg-white/5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap">EDIT CONFIG</button>
                                       )}
                                     </div>
@@ -532,7 +538,7 @@ export default function SuperAdmin({ user, activeTab }) {
                                         </div>
                                       </div>
 
-                                      <div className="flex flex-col gap-2">
+                                      <div className="flex flex-col gap-2 mt-4">
                                         <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider flex items-center gap-1.5">Required Fields (Comma Separated)</label>
                                         {editingLimits?.tenant_id === t.tenant_id ? (
                                           <input type="text" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-brand" 
@@ -541,6 +547,50 @@ export default function SuperAdmin({ user, activeTab }) {
                                         ) : (
                                           <div className="text-[12px] text-white/60 font-mono bg-black/40 px-3 py-2 rounded-lg border border-white/5 truncate">
                                             {(t.order_requirements || []).join(", ") || "No requirements"}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex flex-col gap-2 mt-4">
+                                        <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider flex items-center gap-1.5">Custom Statuses (Comma Separated)</label>
+                                        {editingLimits?.tenant_id === t.tenant_id ? (
+                                          <input type="text" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-brand" 
+                                            placeholder="e.g. PENDING, SHIPPED, DELIVERED"
+                                            value={editingLimits.custom_statuses || ""} onChange={(e) => setEditingLimits({...editingLimits, custom_statuses: e.target.value})} />
+                                        ) : (
+                                          <div className="text-[12px] text-white/60 font-mono bg-black/40 px-3 py-2 rounded-lg border border-white/5 truncate">
+                                            {(t.custom_statuses || []).join(", ") || "Default"}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex flex-col gap-2 mt-4">
+                                        <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider flex items-center gap-1.5">No Cancellations After (Status)</label>
+                                        {editingLimits?.tenant_id === t.tenant_id ? (
+                                          <select className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-brand" 
+                                            value={editingLimits.cancellation_cutoff_status || "SHIPPED"} onChange={(e) => setEditingLimits({...editingLimits, cancellation_cutoff_status: e.target.value})}>
+                                            {(editingLimits.custom_statuses || "").split(",").map(s => s.trim()).filter(s => s).map(s => (
+                                              <option key={s} value={s}>{s}</option>
+                                            ))}
+                                            {!(editingLimits.custom_statuses) && ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED"].map(s => (
+                                              <option key={s} value={s}>{s}</option>
+                                            ))}
+                                          </select>
+                                        ) : (
+                                          <div className="text-[12px] text-white/60 font-mono bg-black/40 px-3 py-2 rounded-lg border border-white/5 truncate">
+                                            {t.cancellation_cutoff_status || "SHIPPED"}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex flex-col gap-2 mt-4">
+                                        <label className="text-[10px] font-bold text-white/60 uppercase tracking-wider flex items-center gap-1.5">Cancellation Window (Hours)</label>
+                                        {editingLimits?.tenant_id === t.tenant_id ? (
+                                          <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-brand" 
+                                            value={editingLimits.cancellation_hours} onChange={(e) => setEditingLimits({...editingLimits, cancellation_hours: e.target.value})} />
+                                        ) : (
+                                          <div className="text-[12px] text-white/60 font-mono bg-black/40 px-3 py-2 rounded-lg border border-white/5 truncate">
+                                            {t.cancellation_hours || 24} hours
                                           </div>
                                         )}
                                       </div>

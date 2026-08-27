@@ -81,7 +81,10 @@ async def get_metrics():
                 "orders_enabled": t.get("orders_enabled", False),
                 "returns_enabled": t.get("returns_enabled", False),
                 "cancellations_enabled": t.get("cancellations_enabled", False),
-                "order_requirements": t.get("order_requirements", [])
+                "cancellation_hours": t.get("cancellation_hours", 24),
+                "order_requirements": t.get("order_requirements", []),
+                "custom_statuses": t.get("custom_statuses", ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "RETURN_REQUESTED", "RETURNED", "CANCELLED"]),
+                "cancellation_cutoff_status": t.get("cancellation_cutoff_status", "SHIPPED")
             })
             total_docs += t_docs
             total_client_tokens += t_tokens
@@ -172,6 +175,9 @@ class TenantLimitsIn(BaseModel):
     order_requirements: list[str] | None = None
     returns_enabled: bool | None = None
     cancellations_enabled: bool | None = None
+    custom_statuses: list[str] | None = None
+    cancellation_cutoff_status: str | None = None
+    cancellation_hours: int | None = None
 
 @router.put("/tenants/{tenant_id}/limits")
 async def update_tenant_limits(tenant_id: str, body: TenantLimitsIn):
@@ -190,6 +196,12 @@ async def update_tenant_limits(tenant_id: str, body: TenantLimitsIn):
         update_data["returns_enabled"] = body.returns_enabled
     if body.cancellations_enabled is not None:
         update_data["cancellations_enabled"] = body.cancellations_enabled
+    if body.custom_statuses is not None:
+        update_data["custom_statuses"] = body.custom_statuses
+    if body.cancellation_cutoff_status is not None:
+        update_data["cancellation_cutoff_status"] = body.cancellation_cutoff_status
+    if body.cancellation_hours is not None:
+        update_data["cancellation_hours"] = body.cancellation_hours
         
     res = await db.tenants.update_one(
         {"tenant_id": tenant_id},
