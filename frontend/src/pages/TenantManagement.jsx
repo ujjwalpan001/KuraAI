@@ -50,7 +50,7 @@ function WhatsAppPanel({ instanceName, tenantId, onCreated }) {
       await api.evoCreateInstance(tenantId, tenantId);
       onCreated(tenantId);
     } catch (e) {
-      alert("Failed to create instance: " + e.message);
+      alert("We are unable to connect to the WhatsApp Gateway right now. Please try again after some time.");
     } finally {
       setLoading(false);
     }

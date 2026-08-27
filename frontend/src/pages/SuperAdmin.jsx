@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Building, Bot, ShieldAlert, MonitorPlay, Save, Database, Activity, TrendingUp, AlertTriangle, MessageSquare, Plus, ChevronDown, ChevronUp, Calendar, DollarSign, Send, X, Trash2 } from "lucide-react";
+import { Users, Building, Bot, ShieldAlert, MonitorPlay, Save, Database, Activity, TrendingUp, AlertTriangle, MessageSquare, Plus, ChevronDown, ChevronUp, Calendar, DollarSign, Send, X, Trash2, Eye, EyeOff } from "lucide-react";
 import { api } from "../api/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 
@@ -16,6 +16,7 @@ export default function SuperAdmin({ user, activeTab }) {
   // UI State
   const [isProvisionModalOpen, setIsProvisionModalOpen] = useState(false);
   const [expandedClient, setExpandedClient] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [editingLimits, setEditingLimits] = useState(null);
@@ -634,7 +635,16 @@ export default function SuperAdmin({ user, activeTab }) {
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-white/50 uppercase tracking-wider mb-2">Initial Password</label>
-                    <input type="password" value={newClient.password} onChange={e => setNewClient({...newClient, password: e.target.value})} className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-[13px] text-white placeholder-white/20 focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" placeholder="••••••••" />
+                    <div className="relative">
+                      <input type={showPassword ? "text" : "password"} value={newClient.password} onChange={e => setNewClient({...newClient, password: e.target.value})} className="w-full pl-4 pr-10 py-3 bg-black/40 border border-white/10 rounded-xl text-[13px] text-white placeholder-white/20 focus:border-brand focus:ring-1 focus:ring-brand outline-none transition-all" placeholder="••••••••" />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="p-6 border-t border-white/5 bg-black/20 flex justify-end gap-3">

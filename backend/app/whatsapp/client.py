@@ -118,21 +118,32 @@ async def create_instance(instance_name: str, webhook_url: str) -> dict:
     """Create a new WhatsApp instance on the Evolution API server."""
     # Step 1: Create instance with instance_name acting as its own token
     create_res = await _post_admin("/instance/create", {
-        "name": instance_name,
+        "instanceName": instance_name,
         "token": instance_name,
+        "qrcode": True
     })
     
-    # Step 2: Set webhook and connect using the instance API key (which is the instance_name)
+    # Step 2: Set webhook (Evolution API v1/v2 compat)
     try:
-        connect_res = await _post_instance(instance_name, "/instance/connect", {
-            "webhookUrl": webhook_url,
-            "subscribe": ["ALL"],
+        await _post_instance(instance_name, f"/webhook/set/{instance_name}", {
+            "webhook": {
+                "url": webhook_url,
+                "byEvents": False,
+                "base64": False,
+                "events": ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"]
+            }
         })
     except Exception as e:
-        # If it fails to connect, we should probably delete it or log it
-        print(f"Failed to set webhook: {e}")
-        pass
-        
+        print(f"Failed to set webhook via /webhook/set: {e}")
+        # Fallback to old v1 way just in case
+        try:
+            await _post_instance(instance_name, "/instance/connect", {
+                "webhookUrl": webhook_url,
+                "subscribe": ["ALL"],
+            })
+        except Exception:
+            pass
+            
     return create_res
 
 
