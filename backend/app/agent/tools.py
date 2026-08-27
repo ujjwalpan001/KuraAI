@@ -47,9 +47,9 @@ TOOLS = [
     {
         "name": "search_knowledge",
         "description": (
-            "Search the knowledge base for FACTUAL answers about policies, delivery, warranty, "
+            "Search the knowledge base for FACTUAL answers about pricing, subscription plans, policies, delivery, warranty, "
             "showrooms, payment, or general FAQs (not a specific product photo). "
-            "Use for questions like 'what is your return policy', 'how long is delivery', 'where are your showrooms'."
+            "Use for questions like 'what is the pricing', 'what are the plans', 'what is your return policy', 'how long is delivery'."
         ),
         "parameters": {
             "type": "object",
@@ -106,10 +106,31 @@ TOOLS = [
                 },
                 "collected_info": {
                     "type": "string",
-                    "description": "A JSON string containing all the dynamically collected information (e.g. {\"Customer Name\": \"John\", \"Address\": \"123 St\"})."
+                    "description": "A JSON string containing EVERY SINGLE detail you collected from the user during the chat (e.g. {\"Customer Name\": \"John\", \"Company\": \"Acme\", \"Email\": \"john@acme.com\"}). DO NOT LEAVE ANY FIELD OUT. You must extract them from the conversation history."
                 }
             },
             "required": ["product_name", "collected_info"],
+        },
+    },
+    {
+        "name": "save_customer_detail",
+        "description": (
+            "Save a specific piece of information collected from the user (e.g. 'Name', 'Company Name', 'Email') to the database IMMEDIATELY after they provide it. "
+            "Call this tool on the EXACT same turn the user answers your question, so you don't forget it later."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "The name of the field (e.g. 'Name', 'Email')"
+                },
+                "value": {
+                    "type": "string",
+                    "description": "The value the user provided"
+                }
+            },
+            "required": ["key", "value"],
         },
     },
     {

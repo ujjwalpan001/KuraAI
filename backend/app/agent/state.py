@@ -21,6 +21,7 @@ class AgentState(TypedDict):
     rag_chunks: Optional[list]
     catalog_names: Optional[list]         # full catalog inventory (names) for honesty
     global_settings: Optional[dict]       # superadmin global CMS settings
+    context_vars: Optional[dict]          # dynamically saved variables (Name, Email, etc.)
 
     # LLM output (Node 3)
     llm_reply: Optional[str]

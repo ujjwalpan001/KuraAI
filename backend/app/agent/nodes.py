@@ -142,6 +142,10 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     
     # Global settings
     state["global_settings"] = await db.global_settings.find_one({"_id": "main"}) or {}
+    
+    # Context Vars (saved dynamically)
+    session = await db.chat_sessions.find_one({"session_id": state["session_id"]})
+    state["context_vars"] = session.get("context_vars", {}) if session else {}
 
     # Catalog inventory (names) so the bot is HONEST about what actually exists
     cat = await db.catalog_items.find(
@@ -315,8 +319,15 @@ async def _handle_inbound_image(state: AgentState, db, img_bytes: bytes) -> None
 # Node 3: LLM Reasoning
 # ---------------------------------------------------------------------------
 
-def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: list | None = None) -> str:
+def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: list | None = None, context_vars: dict = None) -> str:
     prompt = ""
+    
+    if context_vars:
+        prompt += "--- DYNAMICALLY COLLECTED USER DETAILS ---\n"
+        prompt += "These details have already been saved to the database. You do NOT need to ask for them again.\n"
+        for k, v in context_vars.items():
+            prompt += f"- {k}: {v}\n"
+        prompt += "------------------------------------------\n\n"
 
     # Tell the LLM what's in the catalog so it's HONEST about what exists
     if catalog_names:
@@ -485,7 +496,12 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
         return state
 
     tenant = state["tenant_config"]
-    system_prompt = _build_system_prompt(tenant, state.get("global_settings", {}), state.get("catalog_names"))
+    system_prompt = _build_system_prompt(
+        tenant, 
+        state.get("global_settings", {}), 
+        state.get("catalog_names"),
+        state.get("context_vars", {})
+    )
 
     # Build OpenAI-style message list: system + last-5 history + current
     messages = [{"role": "system", "content": system_prompt}]
@@ -641,6 +657,24 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 state["session_status"] = "NEEDS_HUMAN"
                 result = {"status": "escalated"}
 
+            elif name == "save_customer_detail":
+                key = args.get("key") or ""
+                val = args.get("value") or ""
+                logger.info(f"[TOOL] save_customer_detail({key!r} = {val!r})")
+                if key and val:
+                    db = get_db()
+                    await db.chat_sessions.update_one(
+                        {"session_id": state["session_id"]},
+                        {"$set": {f"context_vars.{key}": val}}
+                    )
+                    # Also update our local state so the next LLM call knows it's saved
+                    if "context_vars" not in state or not state["context_vars"]:
+                        state["context_vars"] = {}
+                    state["context_vars"][key] = val
+                    result = {"status": "success", "message": f"Successfully saved {key} = {val}."}
+                else:
+                    result = {"status": "error", "message": "Key or value missing."}
+
             elif name == "place_order":
                 product = args.get("product_name") or ""
                 qty = args.get("quantity") or 1
@@ -648,6 +682,12 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     info = json.loads(args.get("collected_info") or "{}")
                 except Exception:
                     info = {"raw": args.get("collected_info")}
+                
+                # Merge dynamically saved details (from save_customer_detail) into the final order
+                for k, v in state.get("context_vars", {}).items():
+                    if k not in info:
+                        info[k] = v
+                        
                 logger.info(f"[TOOL] place_order(product={product!r}, info={info})")
                 
                 order_id_str = f"ORD-{str(uuid4())[:6].upper()}"
@@ -852,7 +892,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 if status == "not_found":
                     needs_llm_call2 = True  # LLM handles "I don't have that"
                 # status == "sent" → template handles it ✅
-            elif name in ("search_catalog", "search_knowledge", "escalate_to_human", "place_order", "submit_payment_proof", "initiate_return"):
+            elif name in ("search_catalog", "search_knowledge", "escalate_to_human", "place_order", "submit_payment_proof", "initiate_return", "cancel_order", "check_order_status", "save_customer_detail"):
                 needs_llm_call2 = True  # These always need natural language
         
         if needs_llm_call2:
