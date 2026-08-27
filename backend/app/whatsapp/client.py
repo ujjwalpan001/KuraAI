@@ -121,6 +121,7 @@ async def create_instance(instance_name: str, webhook_url: str) -> dict:
         # Extra fields like 'qrcode' can cause 400 Bad Request if strict JSON decoding is enabled.
         create_res = await _post_admin("/instance/create", {
             "instanceName": instance_name,
+            "name": instance_name,
             "token": instance_name
         })
     except Exception as e:
