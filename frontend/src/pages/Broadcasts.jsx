@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Megaphone, Users, MessageSquare, Send, CheckCircle2, AlertCircle, Paperclip, X } from "lucide-react";
+import { Megaphone, Users, MessageSquare, Send, CheckCircle2, AlertCircle, Paperclip, X, Sparkles, Copy, Check } from "lucide-react";
 import { api } from "../api/client";
 
 export default function Broadcasts({ tenantId }) {
@@ -12,6 +12,9 @@ export default function Broadcasts({ tenantId }) {
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaData, setMediaData] = useState(null); // { url, type, filename }
   const [tenantObj, setTenantObj] = useState(null);
+  
+  const [showPromptHelper, setShowPromptHelper] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -117,6 +120,22 @@ export default function Broadcasts({ tenantId }) {
       setMediaFile(null);
     }
     setSending(false);
+  };
+
+  const aiPrompt = `I have a list of customer contacts. Please format them exactly as a simple text list with each line in the format: "Phone, Name". 
+Rules:
+1. Remove any spaces, dashes, or special characters from the phone number.
+2. Ensure the country code is included.
+3. Do not output any markdown, explanations, or other text—ONLY the formatted list.
+4. If a name is missing, just use "Customer".
+
+Here is the raw data:
+[PASTE YOUR RAW DATA HERE]`;
+
+  const copyPrompt = () => {
+    navigator.clipboard.writeText(aiPrompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
   return (
