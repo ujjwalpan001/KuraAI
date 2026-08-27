@@ -7,6 +7,7 @@ export default function Broadcasts({ tenantId }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null); // { sent: [...], failed: [...] }
+  const [totalContacts, setTotalContacts] = useState(0);
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaData, setMediaData] = useState(null); // { url, type, filename }
@@ -71,28 +72,51 @@ export default function Broadcasts({ tenantId }) {
     }
 
     setSending(true);
-    setResult(null);
-    try {
-      const res = await api.broadcast({
-        tenant_id: tenantId,
-        contacts: contactList,
-        message: message.trim(),
-        media_url: mediaData?.url,
-        media_type: mediaData?.type,
-        media_filename: mediaData?.filename
-      });
-      setResult(res);
-      if (res.failed && res.failed.length === 0) {
-        setPhones("");
-        setMessage("");
-        setMediaData(null);
-        setMediaFile(null);
+    setResult({ sent: [], failed: [] });
+    setTotalContacts(contactList.length);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < contactList.length; i++) {
+      const contact = contactList[i];
+      try {
+        const res = await api.broadcast({
+          tenant_id: tenantId,
+          contacts: [contact],
+          message: message.trim(),
+          media_url: mediaData?.url,
+          media_type: mediaData?.type,
+          media_filename: mediaData?.filename
+        });
+        
+        if (res.sent && res.sent.length > 0) {
+           setResult(prev => ({ ...prev, sent: [...prev.sent, contact.phone] }));
+           successCount++;
+        }
+        if (res.failed && res.failed.length > 0) {
+           setResult(prev => ({ ...prev, failed: [...prev.failed, res.failed[0]] }));
+           failCount++;
+        }
+      } catch (e) {
+        setResult(prev => ({ ...prev, failed: [...prev.failed, { phone: contact.phone, error: e.message }] }));
+        failCount++;
       }
-    } catch (e) {
-      alert("Broadcast failed: " + e.message);
-    } finally {
-      setSending(false);
+
+      // Add a random delay between 3-8 seconds if it's not the last contact
+      if (i < contactList.length - 1) {
+        const delayMs = Math.floor(Math.random() * (8000 - 3000 + 1) + 3000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
+
+    if (failCount === 0) {
+      setPhones("");
+      setMessage("");
+      setMediaData(null);
+      setMediaFile(null);
+    }
+    setSending(false);
   };
 
   return (
@@ -251,8 +275,16 @@ export default function Broadcasts({ tenantId }) {
           )}
 
           {sending && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-               <p className="text-[14px] text-brand animate-pulse font-medium">Transmitting messages to WhatsApp API...</p>
+            <div className="flex flex-col items-center justify-center text-center p-6 bg-brand/5 rounded-lg border border-brand/20 mb-4">
+               <svg className="animate-spin w-8 h-8 text-brand mb-3" viewBox="0 0 24 24" fill="none">
+                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
+                 <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+               </svg>
+               <p className="text-[14px] text-brand font-medium">Broadcasting in progress...</p>
+               <p className="text-[12px] text-muted mt-2 font-bold">
+                 Sent: {(result?.sent?.length || 0) + (result?.failed?.length || 0)} / {totalContacts}
+               </p>
+               <p className="text-[11px] text-brand/60 mt-2">Please do not close this tab.</p>
             </div>
           )}
 

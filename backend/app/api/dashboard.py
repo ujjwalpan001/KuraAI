@@ -216,6 +216,14 @@ async def broadcast(req: BroadcastRequest):
                 await wa.send_text_message(instance_name, phone, personalized_message)
                 
             results["sent"].append(phone)
+            
+            # Anti-ban protection: add a random delay of 3 to 8 seconds between messages
+            # Only delay if this isn't the last contact in the list
+            if contact != req.contacts[-1]:
+                import asyncio
+                import random
+                await asyncio.sleep(random.uniform(3.0, 8.0))
+                
         except Exception as e:
             results["failed"].append({"phone": phone, "error": str(e)})
 
