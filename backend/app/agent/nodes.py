@@ -808,7 +808,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                             admin_numbers.append(tenant.get("owner_number"))
                         if admin_numbers:
                             instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
-                            notif_msg = f"💳 *PAYMENT PROOF SUBMITTED!*\n\n*Customer:* {state['customer_phone']}\n*Order:* {recent_order.get('product_name')}\n*Proof:* {txn_id}\n\n_Please check your dashboard to verify this payment._"
+                            notif_msg = f"💳 *PAYMENT PROOF SUBMITTED!*\n\n*Customer:* {state['customer_phone']}\n*Order:* {recent_order.get('product_name')}\n*Proof:* {txn_id}\n\n👉 *Reply 1* to APPROVE\n👉 *Reply 0* to REJECT"
                             for number in admin_numbers:
                                 import app.whatsapp.client as wa
                                 await wa.send_text_message(instance_name, number, notif_msg)

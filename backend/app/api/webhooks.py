@@ -418,7 +418,42 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
         sender_alt = message_data.get("sender_alt_phone")
         
         # Check if the real phone or the hidden LID matches a personal number
-        if customer_phone in p_nums or (sender_alt and sender_alt in p_nums):
+        owner_number = tenant.get("owner_number")
+        is_admin = customer_phone in p_nums or (sender_alt and sender_alt in p_nums) or customer_phone == owner_number
+        
+        if is_admin:
+            text_content = message_data.get("text_content", "").strip().lower()
+            if text_content in ("1", "0", "approve", "reject", "approved", "rejected"):
+                recent_order = await db.orders.find_one(
+                    {"tenant_id": tenant_id, "payment_status": "VERIFICATION_PENDING"},
+                    sort=[("created_at", -1)]
+                )
+                if recent_order:
+                    is_approve = text_content in ("1", "approve", "approved")
+                    new_order_status = "PROCESSING" if is_approve else "CANCELLED"
+                    new_payment_status = "VERIFIED" if is_approve else "REJECTED"
+                    
+                    await db.orders.update_one(
+                        {"_id": recent_order["_id"]},
+                        {"$set": {"status": new_order_status, "payment_status": new_payment_status}}
+                    )
+                    
+                    instance_name = message_data.get("instance_name", "default")
+                    # Notify admin
+                    admin_reply = f"✅ Order {recent_order.get('order_id')} has been marked as {new_payment_status}."
+                    await wa.send_text_message(instance_name, customer_phone, admin_reply)
+                    
+                    # Notify customer
+                    cust_phone = recent_order.get("customer_phone")
+                    if cust_phone:
+                        if is_approve:
+                            cust_reply = f"🎉 Great news! Your payment for order {recent_order.get('order_id')} has been verified. Your order is now processing!"
+                        else:
+                            cust_reply = f"❌ Unfortunately, we could not verify your payment for order {recent_order.get('order_id')}. Please try submitting it again or ask to speak to a human."
+                        await wa.send_text_message(instance_name, cust_phone, cust_reply)
+                        
+                    return Response(status_code=200)
+
             # It's a personal number! Wipe any ghost sessions that might have been created
             phones_to_wipe = [p for p in (customer_phone, sender_alt) if p]
             ghost_sessions = await db.chat_sessions.find({"customer_phone": {"$in": phones_to_wipe}}).to_list(None)
