@@ -166,11 +166,8 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     ).sort("timestamp", -1).limit(6).to_list(6)
     state["chat_history"] = list(reversed(msgs))
 
-    # RAG - Qdrant cloud is always ready
-    state["rag_chunks"] = search_knowledge_base(
-        query=state["inbound_text"],
-        tenant_id=state["tenant_id"],
-    )
+    # RAG chunks are now lazy-loaded ONLY if the LLM calls the search_knowledge tool.
+    state["rag_chunks"] = []
 
     # --- Visible flow logging ---
     logger.info(f"[INBOUND] ({tenant['name']}) customer said: {state['inbound_text']!r}")
@@ -295,7 +292,7 @@ async def _handle_inbound_image(state: AgentState, db, img_bytes: bytes) -> None
     try:
         vision_resp = await _groq_create(
             groq,
-            model="llama-3.2-11b-vision-preview",
+            model=settings.groq_model,
             messages=[
                 {
                     "role": "user",
@@ -430,6 +427,13 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             "Answer questions based on the knowledge base provided."
         )
 
+    prompt += "--- ANTI-HALLUCINATION & RAG RULES ---\n"
+    prompt += (
+        "1. NEVER guess or invent prices, services, or facts. "
+        "2. If the user asks about ANY products, services, pricing, or business details, you MUST call the `search_knowledge` or `search_catalog` tool first to verify the facts.\n"
+        "3. Only answer from your general knowledge if the user is making casual small talk (like saying 'Hi').\n\n"
+    )
+
     prompt += "--- FORMATTING RULES ---\n"
     prompt += "CRITICAL: Do NOT use markdown formatting like asterisks (*) for bold text. Your output must be plain text without any asterisks.\n\n"
     
@@ -519,12 +523,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
 
     user_text = state["inbound_text"]
     
-    # Attach RAG chunks directly to the user's message so the System Prompt remains static and fully cached!
-    rag = state.get("rag_chunks") or []
-    if rag:
-        context = "\n".join([f"[{i}] {chunk[:500]}" for i, chunk in enumerate(rag[:4], 1)])
-        user_text = f"--- KNOWLEDGE BASE ---\n{context}\n\nBase your answer strictly on the knowledge base above.\n--- END KNOWLEDGE BASE ---\n\nCustomer says: {user_text}"
-        
+
     if state.get("inbound_image_description"):
         user_text = f"[Customer sent an image: {state['inbound_image_description']}]\n{user_text}"
     if state.get("inbound_doc_summary"):
