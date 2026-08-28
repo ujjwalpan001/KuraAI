@@ -335,11 +335,7 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     payload_bytes = await request.body()
     payload = json.loads(payload_bytes) if payload_bytes else {}
 
-    db = get_db()
-    try:
-        await db.raw_webhooks.insert_one({"received_at": datetime.utcnow(), "payload": payload})
-    except Exception as e:
-        logger.error(f"Failed to log raw webhook: {e}")
+    pass
 
     message_data = _extract_message(payload)
     if not message_data:

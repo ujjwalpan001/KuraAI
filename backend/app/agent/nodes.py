@@ -771,7 +771,20 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
             elif name == "submit_payment_proof":
                 txn_id = args.get("transaction_id") or ""
                 logger.info(f"[TOOL] submit_payment_proof(txn={txn_id!r})")
-                db = get_db()
+                
+                # Hard validation to prevent LLM from hallucinating a proof when user just says "okay"
+                has_image = state.get("inbound_media_type") in ("image", "document") or state.get("inbound_image_description")
+                inbound_text = state.get("inbound_text") or ""
+                import re
+                has_txn_number = bool(re.search(r'[A-Za-z0-9]{6,}', inbound_text))
+                
+                if not has_image and not has_txn_number:
+                    result = {
+                        "status": "error",
+                        "message": "Payment proof rejected. The customer DID NOT attach a screenshot and DID NOT provide a valid transaction ID number in their text. You MUST reply to the customer asking them to explicitly upload a screenshot of the payment or type the exact transaction ID."
+                    }
+                else:
+                    db = get_db()
                 
                 # Find the most recent PENDING order for this customer
                 recent_order = await db.orders.find_one(
