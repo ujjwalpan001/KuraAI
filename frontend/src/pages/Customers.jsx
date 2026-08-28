@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Trash2, Phone, Search, RefreshCw, Mail, Calendar, ShoppingBag, Download, X } from "lucide-react";
+import { Users, Trash2, Phone, Search, RefreshCw, Mail, Calendar, ShoppingBag, Download, X, ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../api/client";
 
 export default function Customers({ activeTenant }) {
@@ -10,6 +10,16 @@ export default function Customers({ activeTenant }) {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
+  const [expandedOrders, setExpandedOrders] = useState(new Set());
+
+  const toggleOrders = (phone) => {
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(phone)) next.delete(phone);
+      else next.add(phone);
+      return next;
+    });
+  };
 
   const loadCustomers = async () => {
     if (!activeTenant) return;
@@ -252,28 +262,50 @@ export default function Customers({ activeTenant }) {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
-                          {orders.filter(o => o.customer_phone === c.customer_phone).length === 0 ? (
-                            <span className="text-white/30 text-xs">-</span>
-                          ) : (
-                            orders.filter(o => o.customer_phone === c.customer_phone).map((o, idx) => (
-                              <div key={idx} className="flex flex-col bg-white/[0.03] border border-white/5 rounded-lg p-2 text-[11px]">
-                                <div className="flex items-center gap-1.5 font-medium text-white/80">
+                          {(() => {
+                            const custOrders = orders.filter(o => o.customer_phone === c.customer_phone);
+                            if (custOrders.length === 0) {
+                              return <span className="text-white/30 text-xs">-</span>;
+                            }
+                            
+                            const isExpanded = expandedOrders.has(c.customer_phone);
+                            
+                            return (
+                              <div className="flex flex-col gap-2">
+                                <button 
+                                  onClick={() => toggleOrders(c.customer_phone)}
+                                  className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-[11px] text-white/70 w-max"
+                                >
                                   <ShoppingBag size={12} className="text-brand" />
-                                  {o.product_name} x{o.quantity || 1}
-                                </div>
-                                <div className="text-white/40 mt-1 flex justify-between items-center">
-                                  <span className="font-mono">{o.order_id}</span>
-                                  <span className={`px-1.5 py-0.5 rounded uppercase text-[9px] font-bold ${
-                                    o.status === "DELIVERED" ? "bg-emerald-500/10 text-emerald-400" :
-                                    o.status === "PENDING" ? "bg-amber-500/10 text-amber-400" :
-                                    "bg-blue-500/10 text-blue-400"
-                                  }`}>
-                                    {o.status}
-                                  </span>
-                                </div>
+                                  View {custOrders.length} Order{custOrders.length > 1 ? 's' : ''}
+                                  {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                                
+                                {isExpanded && (
+                                  <div className="flex flex-col gap-2 mt-1">
+                                    {custOrders.map((o, idx) => (
+                                      <div key={idx} className="flex flex-col bg-white/[0.03] border border-white/5 rounded-lg p-2 text-[11px] animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="flex items-center gap-1.5 font-medium text-white/80">
+                                          <ShoppingBag size={12} className="text-brand" />
+                                          {o.product_name} x{o.quantity || 1}
+                                        </div>
+                                        <div className="text-white/40 mt-1 flex justify-between items-center">
+                                          <span className="font-mono">{o.order_id}</span>
+                                          <span className={`px-1.5 py-0.5 rounded uppercase text-[9px] font-bold ${
+                                            o.status === "DELIVERED" ? "bg-emerald-500/10 text-emerald-400" :
+                                            o.status === "PENDING" ? "bg-amber-500/10 text-amber-400" :
+                                            "bg-blue-500/10 text-blue-400"
+                                          }`}>
+                                            {o.status}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            ))
-                          )}
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="px-6 py-4">
