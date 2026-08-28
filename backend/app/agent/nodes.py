@@ -161,7 +161,6 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     
     # Ensure any session-specific variables are synced back to the global customer profile
     if session_vars:
-        from datetime import datetime
         await db.customers.update_one(
             {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"]},
             {"$set": {"profile": state["context_vars"], "last_updated": datetime.utcnow()}},
@@ -699,7 +698,6 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                         {"$set": {f"context_vars.{key}": val}}
                     )
                     # Save permanently to customers collection for cross-session memory
-                    from datetime import datetime
                     await db.customers.update_one(
                         {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"]},
                         {"$set": {f"profile.{key}": val, "last_updated": datetime.utcnow()}},
