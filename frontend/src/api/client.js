@@ -174,7 +174,7 @@ export const api = {
   // Orders
   getOrders: (tenantId) => get(`/api/tenants/${tenantId}/orders`),
   updateOrderStatus: (orderId, status) => send(`/api/orders/${orderId}/status`, "PUT", { status }),
-  verifyPayment: (orderId) => send(`/api/orders/${orderId}/payment-status`, "PUT", { payment_status: "VERIFIED" }),
+  setPaymentStatus: (orderId, status) => send(`/api/orders/${orderId}/payment-status`, "PUT", { payment_status: status }),
   
   // Customers
   getCustomers: (tenantId) => get(`/api/tenants/${tenantId}/customers`),

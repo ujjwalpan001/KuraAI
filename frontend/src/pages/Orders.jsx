@@ -82,12 +82,19 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
     }
   };
 
-  const handleVerifyPayment = async (orderId) => {
-    setOrders(orders.map(o => o._id === orderId ? { ...o, payment_status: "VERIFIED" } : o));
+  const handleProcessPayment = async (orderId, isApprove) => {
+    const paymentStatus = isApprove ? "VERIFIED" : "REJECTED";
+    
+    // Check if 'PAYMENT' exists in dynamicStatuses, otherwise fallback to 'PROCESSING'
+    const hasPaymentCol = dynamicStatuses.some(s => s.id === "PAYMENT" || s.label.toUpperCase() === "PAYMENT");
+    const targetStatus = isApprove ? (hasPaymentCol ? "PAYMENT" : "PROCESSING") : "CANCELLED";
+
+    setOrders(orders.map(o => o._id === orderId ? { ...o, payment_status: paymentStatus, status: targetStatus } : o));
     try {
-      await api.verifyPayment(orderId);
+      await api.updateOrderStatus(orderId, targetStatus);
+      await api.setPaymentStatus(orderId, paymentStatus);
     } catch (e) {
-      alert("Failed to verify payment");
+      alert("Failed to process payment");
       loadOrders();
     }
   };
@@ -198,12 +205,20 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
                         <div className="mb-4 bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                           <div className="text-[11px] font-bold text-blue-500 mb-1">Payment Proof Submitted</div>
                           <div className="text-[11px] text-ink/70 font-mono mb-2 truncate">ID: {order.payment_proof}</div>
-                          <button 
-                            onClick={() => handleVerifyPayment(order._id)}
-                            className="w-full bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-bold py-1.5 rounded transition-colors"
-                          >
-                            VERIFY & NOTIFY CUSTOMER
-                          </button>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => handleProcessPayment(order._id, true)}
+                              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold py-1.5 rounded transition-colors"
+                            >
+                              ✓ VERIFY
+                            </button>
+                            <button 
+                              onClick={() => handleProcessPayment(order._id, false)}
+                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1.5 rounded transition-colors"
+                            >
+                              ✕ REJECT
+                            </button>
+                          </div>
                         </div>
                       )}
 

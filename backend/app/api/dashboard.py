@@ -346,18 +346,25 @@ async def update_payment_status(order_id: str, body: PaymentStatusUpdate, user: 
             
     await db.orders.update_one({"_id": oid}, {"$set": {"payment_status": body.payment_status}})
     
-    # Send confirmation to user if verified
-    if body.payment_status == "VERIFIED":
-        try:
-            tenant_doc = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
-            instance_name = (tenant_doc.get("evolution_instance") or "default")
-            import app.whatsapp.client as wa
+    # Send confirmation to user
+    try:
+        tenant_doc = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
+        instance_name = (tenant_doc.get("evolution_instance") or "default")
+        import app.whatsapp.client as wa
+        
+        if body.payment_status == "VERIFIED":
             await wa.send_text_message(
                 instance_name, 
                 order["customer_phone"], 
                 f"✅ *Payment Verified!*\n\nYour payment for {order.get('product_name')} has been successfully verified by our finance department. Your order is now processing!"
             )
-        except Exception as e:
-            print(f"Failed to send payment verification whatsapp: {e}")
+        elif body.payment_status == "REJECTED":
+            await wa.send_text_message(
+                instance_name, 
+                order["customer_phone"], 
+                f"❌ *Payment Rejected*\n\nUnfortunately, we could not verify your payment proof for {order.get('product_name')}. Please try submitting it again or ask to speak to a human for assistance."
+            )
+    except Exception as e:
+        print(f"Failed to send payment status whatsapp: {e}")
             
     return {"ok": True}
