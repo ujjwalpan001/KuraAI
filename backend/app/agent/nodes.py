@@ -145,7 +145,14 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     
     # Context Vars (saved dynamically)
     session = await db.chat_sessions.find_one({"session_id": state["session_id"]})
-    state["context_vars"] = session.get("context_vars", {}) if session else {}
+    session_vars = session.get("context_vars", {}) if session else {}
+    
+    # Cross-session persistent customer profile
+    customer = await db.customers.find_one({"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"]})
+    profile_vars = customer.get("profile", {}) if customer else {}
+    
+    # Merge them (session vars override profile vars if conflict)
+    state["context_vars"] = {**profile_vars, **session_vars}
 
     # Catalog inventory (names) so the bot is HONEST about what actually exists
     cat = await db.catalog_items.find(
@@ -153,10 +160,10 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     ).to_list(None)
     state["catalog_names"] = [c["name"] for c in cat]
 
-    # Last 20 messages (oldest first)
+    # Last 6 messages (oldest first) to save API tokens
     msgs = await db.message_audit_log.find(
         {"session_id": state["session_id"]}
-    ).sort("timestamp", -1).limit(20).to_list(20)
+    ).sort("timestamp", -1).limit(6).to_list(6)
     state["chat_history"] = list(reversed(msgs))
 
     # RAG - Qdrant cloud is always ready
@@ -391,10 +398,10 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             for r in reqs:
                 prompt += f"- {r}\n"
             prompt += (
-                "CRITICAL INSTRUCTION: You MUST ask for these details ONE BY ONE in a natural conversational flow. "
-                "Do NOT ask for all the details at once in a single message. "
-                "Ask for the first missing detail, wait for their reply, then ask for the next, until you have all of them.\n"
-                "Once you have collected ALL this information, call the `place_order` tool.\n"
+                "CRITICAL INSTRUCTION: First, check the 'Saved Customer Details' above. If the customer has ordered before, their details might already be saved!\n"
+                "If some or all required details are missing, you MUST ask the customer for ALL the missing details AT ONCE in a single friendly message to save time.\n"
+                "If the details are ALREADY present in the 'Saved Customer Details', do NOT ask them to type it again. Instead, show them the data you have and ask them to confirm if it is correct.\n"
+                "Once you have confirmed or collected ALL this information, call the `place_order` tool.\n"
             )
             
             if tenant.get("returns_enabled"):
@@ -678,6 +685,14 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                         {"session_id": state["session_id"]},
                         {"$set": {f"context_vars.{key}": val}}
                     )
+                    # Save permanently to customers collection for cross-session memory
+                    from datetime import datetime
+                    await db.customers.update_one(
+                        {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"]},
+                        {"$set": {f"profile.{key}": val, "last_updated": datetime.utcnow()}},
+                        upsert=True
+                    )
+                    
                     # Also update our local state so the next LLM call knows it's saved
                     if "context_vars" not in state or not state["context_vars"]:
                         state["context_vars"] = {}
