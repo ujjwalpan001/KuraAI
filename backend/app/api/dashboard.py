@@ -24,6 +24,37 @@ async def list_tenants(user: dict = Depends(require_user)):
     return {"tenants": tenants}
 
 
+@router.get("/api/tenants/{tenant_id}/customers")
+async def list_customers(tenant_id: str, user: dict = Depends(require_user)):
+    db = get_db()
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized to access this tenant")
+            
+    customers = await db.customers.find(
+        {"tenant_id": tenant_id}, {"_id": 0}
+    ).sort("last_updated", -1).to_list(None)
+
+    for c in customers:
+        if c.get("last_updated"):
+            c["last_updated"] = c["last_updated"].isoformat()
+
+    return {"customers": customers}
+
+
+@router.delete("/api/tenants/{tenant_id}/customers/{phone}")
+async def delete_customer(tenant_id: str, phone: str, user: dict = Depends(require_user)):
+    db = get_db()
+    if user.get("role") != "SUPER_ADMIN":
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if not tenant or tenant.get("client_id") != user["user_id"]:
+            raise HTTPException(403, "Not authorized")
+            
+    await db.customers.delete_one({"tenant_id": tenant_id, "customer_phone": phone})
+    return {"ok": True}
+
+
 @router.get("/api/tenants/{tenant_id}/sessions")
 async def list_sessions(tenant_id: str, user: dict = Depends(require_user)):
     db = get_db()
@@ -157,6 +188,10 @@ async def reply_to_session(session_id: str, body: ReplyIn):
     instance_name = tenant.get("evolution_instance") or "default"
     await send_text_message(instance_name, session["customer_phone"], text)
 
+    from datetime import timedelta
+    retention_hours = int(tenant.get("retention_hours") or 72)
+    expires_at = datetime.utcnow() + timedelta(hours=retention_hours)
+
     await db.message_audit_log.insert_one({
         "message_id": str(uuid4()),
         "session_id": session_id,
@@ -167,10 +202,11 @@ async def reply_to_session(session_id: str, body: ReplyIn):
         "media_url": None, "media_type": None, "media_filename": None,
         "agent_state": "SENT",
         "timestamp": datetime.utcnow(),
+        "expires_at": expires_at,
     })
     await db.chat_sessions.update_one(
         {"session_id": session_id},
-        {"$set": {"last_message_at": datetime.utcnow()}, "$inc": {"message_count": 1}},
+        {"$set": {"last_message_at": datetime.utcnow(), "expires_at": expires_at}, "$inc": {"message_count": 1}},
     )
     return {"ok": True}
 

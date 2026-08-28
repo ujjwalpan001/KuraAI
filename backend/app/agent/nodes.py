@@ -96,6 +96,11 @@ async def acknowledge_node(state: AgentState) -> AgentState:
 
     db = get_db()
 
+    tenant = state.get("tenant_config") or {}
+    from datetime import timedelta
+    retention_hours = int(tenant.get("retention_hours") or 72)
+    expires_at = datetime.utcnow() + timedelta(hours=retention_hours)
+    
     # Save inbound message
     await db.message_audit_log.insert_one({
         "message_id": str(uuid4()),
@@ -110,12 +115,13 @@ async def acknowledge_node(state: AgentState) -> AgentState:
         "agent_state": "TYPING",
         "is_read": True,
         "timestamp": datetime.utcnow(),
+        "expires_at": expires_at,
     })
 
     # Update session status
     await db.chat_sessions.update_one(
         {"session_id": state["session_id"]},
-        {"$set": {"status": "AGENT_RESPONDING", "last_message_at": datetime.utcnow()}},
+        {"$set": {"status": "AGENT_RESPONDING", "last_message_at": datetime.utcnow(), "expires_at": expires_at}},
     )
 
     state["session_status"] = "AGENT_RESPONDING"
@@ -1040,6 +1046,11 @@ async def dispatcher_node(state: AgentState) -> AgentState:
     # If the turn escalated, keep NEEDS_HUMAN so auto-replies stay paused.
     new_status = "NEEDS_HUMAN" if state["session_status"] == "NEEDS_HUMAN" else "WAITING_FOR_BOT"
 
+    tenant = state.get("tenant_config") or {}
+    from datetime import timedelta
+    retention_hours = int(tenant.get("retention_hours") or 72)
+    expires_at = datetime.utcnow() + timedelta(hours=retention_hours)
+
     # Save outbound message
     await db.message_audit_log.insert_one({
         "message_id": str(uuid4()),
@@ -1053,13 +1064,14 @@ async def dispatcher_node(state: AgentState) -> AgentState:
         "media_filename": state.get("media_filename"),
         "agent_state": "SENT",
         "timestamp": datetime.utcnow(),
+        "expires_at": expires_at,
     })
 
     # Update session
     await db.chat_sessions.update_one(
         {"session_id": state["session_id"]},
         {
-            "$set": {"status": new_status, "last_message_at": datetime.utcnow()},
+            "$set": {"status": new_status, "last_message_at": datetime.utcnow(), "expires_at": expires_at},
             "$inc": {"message_count": 2},
         },
     )

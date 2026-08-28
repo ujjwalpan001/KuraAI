@@ -9,6 +9,7 @@ import LiveChats from "./pages/LiveChats";
 import Analytics from "./pages/Analytics";
 import Broadcasts from "./pages/Broadcasts";
 import Orders from "./pages/Orders";
+import Customers from "./pages/Customers";
 import MediaLibrary from "./pages/MediaLibrary";
 import TenantManagement from "./pages/TenantManagement";
 import Landing from "./pages/Landing";
@@ -56,6 +57,8 @@ function Console() {
         return <DashboardOverview tenantId={activeTenant} tenantObj={activeTenantObj} onTenantsChanged={loadTenants} />;
       case "live-chats":
         return <LiveChats tenantId={activeTenant} />;
+      case "customers":
+        return <Customers activeTenant={activeTenant} />;
       case "orders":
         return <Orders tenantId={activeTenant} tenantObj={activeTenantObj} onTenantsChanged={loadTenants} />;
       case "broadcasts":

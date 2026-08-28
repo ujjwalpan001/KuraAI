@@ -47,14 +47,13 @@ export default function Layout({ view, onViewChange, children, activeTenantName,
         { id: "sa-settings", label: "CMS Settings", icon: MonitorPlay }
     ];
   } else {
-    // Inject orders if enabled
-    if (activeTenantObj?.orders_enabled) {
-      navItems = [
-        ...NAVIGATION.slice(0, 2),
-        { id: "orders", label: "Orders", icon: ShoppingCart },
-        ...NAVIGATION.slice(2)
-      ];
-    }
+    // Inject customers and conditionally orders
+    navItems = [
+      ...NAVIGATION.slice(0, 2),
+      { id: "customers", label: "Customers", icon: Users },
+      ...(activeTenantObj?.orders_enabled ? [{ id: "orders", label: "Orders", icon: ShoppingCart }] : []),
+      ...NAVIGATION.slice(2)
+    ];
   }
 
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);

@@ -28,6 +28,10 @@ async def ensure_indexes() -> None:
     await db.message_audit_log.create_index([("session_id", 1), ("timestamp", 1)])
     await db.message_audit_log.create_index("tenant_id")
     await db.message_audit_log.create_index([("timestamp", -1)])
+    
+    # TTL Indexes for Auto-Deletion
+    await db.chat_sessions.create_index("expires_at", expireAfterSeconds=0)
+    await db.message_audit_log.create_index("expires_at", expireAfterSeconds=0)
 
     await db.knowledge_docs.create_index("tenant_id")
     await db.knowledge_docs.create_index("doc_type")
