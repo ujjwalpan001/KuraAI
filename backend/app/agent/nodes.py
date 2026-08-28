@@ -660,8 +660,9 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     cust_phone = state.get("customer_phone", "")
                     alert_text = f"🚨 *Human Escalation Alert*\n\nCustomer *{cust_phone}* has requested human assistance. Please log into the dashboard or reply directly from this WhatsApp number to take over."
                     try:
-                        import asyncio
-                        asyncio.create_task(wa.send_text_message(tenant["evolution_instance"], owner_number, alert_text))
+                        instance_name = tenant.get("evolution_instance") or "default"
+                        import app.whatsapp.client as local_wa
+                        await local_wa.send_text_message(instance_name, owner_number, alert_text)
                     except Exception as e:
                         logger.error(f"Failed to send escalation alert to owner: {e}")
 
@@ -694,8 +695,13 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     info = {"raw": args.get("collected_info")}
                 
                 # Merge dynamically saved details (from save_customer_detail) into the final order
+                existing_keys = {str(k).lower().replace(" ", "").replace("_", "") for k in info.keys()}
+                existing_values = {str(val).lower().strip() for val in info.values()}
+                
                 for k, v in state.get("context_vars", {}).items():
-                    if k not in info:
+                    norm_k = str(k).lower().replace(" ", "").replace("_", "")
+                    norm_v = str(v).lower().strip()
+                    if norm_k not in existing_keys and norm_v not in existing_values:
                         info[k] = v
                         
                 logger.info(f"[TOOL] place_order(product={product!r}, info={info})")
@@ -906,13 +912,27 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 needs_llm_call2 = True  # These always need natural language
         
         if needs_llm_call2:
-            # LLM Call 2 only when necessary
+            # Prevent Groq 400 error by explicitly allowing tools but instructing it not to use them
+            messages.append({
+                "role": "system", 
+                "content": "Tool execution was successful. You MUST now reply to the user in natural language. DO NOT call any more tools. Just respond to the customer."
+            })
             try:
                 resp2 = await _groq_create(
-                    groq, model=settings.groq_model, messages=messages, temperature=0.5, max_tokens=400,
+                    groq, 
+                    model=settings.groq_model, 
+                    messages=messages, 
+                    tools=active_groq_tools,
+                    tool_choice="auto",
+                    temperature=0.5, 
+                    max_tokens=400,
                 )
-                final_reply = resp2.choices[0].message.content or final_reply
-                logger.info("[CALL2] LLM used for complex/ambiguous response")
+                msg2 = resp2.choices[0].message
+                if msg2.content:
+                    final_reply = msg2.content
+                    logger.info("[CALL2] LLM used for complex/ambiguous response")
+                else:
+                    logger.warning("[CALL2] LLM ignored instructions and called a tool again. Retaining previous reply or fallback.")
             except Exception as e:
                 logger.warning(f"Groq follow-up failed: {e}")
         
