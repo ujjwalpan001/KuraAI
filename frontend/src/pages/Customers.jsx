@@ -167,21 +167,41 @@ export default function Customers({ activeTenant }) {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-2">From Date</label>
-                <input 
-                  type="date" 
-                  value={exportFrom}
-                  onChange={(e) => setExportFrom(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand transition-colors" 
-                />
+                <div className="relative">
+                  <input 
+                    type="date" 
+                    value={exportFrom}
+                    onChange={(e) => setExportFrom(e.target.value)}
+                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand transition-colors cursor-pointer [color-scheme:dark]" 
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-2">To Date</label>
-                <input 
-                  type="date" 
-                  value={exportTo}
-                  onChange={(e) => setExportTo(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand transition-colors" 
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-medium text-white/60 uppercase tracking-wider">To Date</label>
+                  <button 
+                    onClick={() => {
+                      const today = new Date();
+                      const yyyy = today.getFullYear();
+                      const mm = String(today.getMonth() + 1).padStart(2, '0');
+                      const dd = String(today.getDate()).padStart(2, '0');
+                      setExportTo(`${yyyy}-${mm}-${dd}`);
+                    }}
+                    className="text-[10px] bg-brand/20 text-brand px-2 py-0.5 rounded border border-brand/30 hover:bg-brand/30 transition-colors uppercase font-bold"
+                  >
+                    Set Today
+                  </button>
+                </div>
+                <div className="relative">
+                  <input 
+                    type="date" 
+                    value={exportTo}
+                    onChange={(e) => setExportTo(e.target.value)}
+                    onClick={(e) => e.target.showPicker && e.target.showPicker()}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand transition-colors cursor-pointer [color-scheme:dark]" 
+                  />
+                </div>
               </div>
             </div>
             <div className="p-5 border-t border-white/10 flex justify-end gap-3 bg-white/[0.02]">
