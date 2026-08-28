@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -188,7 +188,6 @@ async def reply_to_session(session_id: str, body: ReplyIn):
     instance_name = tenant.get("evolution_instance") or "default"
     await send_text_message(instance_name, session["customer_phone"], text)
 
-    from datetime import timedelta
     retention_hours = int(tenant.get("retention_hours") or 72)
     expires_at = datetime.utcnow() + timedelta(hours=retention_hours)
 

@@ -1,18 +1,26 @@
 import { useState, useEffect } from "react";
-import { Users, Trash2, Phone, Search, RefreshCw, Mail, Calendar } from "lucide-react";
+import { Users, Trash2, Phone, Search, RefreshCw, Mail, Calendar, ShoppingBag, Download, X } from "lucide-react";
 import { api } from "../api/client";
 
 export default function Customers({ activeTenant }) {
   const [customers, setCustomers] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
 
   const loadCustomers = async () => {
     if (!activeTenant) return;
     setLoading(true);
     try {
-      const res = await api.getCustomers(activeTenant);
-      setCustomers(res.customers || []);
+      const [custRes, ordRes] = await Promise.all([
+        api.getCustomers(activeTenant),
+        api.getOrders(activeTenant).catch(() => ({ orders: [] }))
+      ]);
+      setCustomers(custRes.customers || []);
+      setOrders(ordRes.orders || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -39,6 +47,65 @@ export default function Customers({ activeTenant }) {
     JSON.stringify(c.profile || {}).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleExport = () => {
+    if (!exportFrom || !exportTo) {
+      alert("Please select both From and To dates");
+      return;
+    }
+    
+    const from = new Date(exportFrom);
+    const to = new Date(exportTo);
+    to.setHours(23, 59, 59, 999);
+    
+    const exportData = customers.filter(c => {
+      if (!c.last_updated) return false;
+      const d = new Date(c.last_updated);
+      return d >= from && d <= to;
+    });
+
+    if (exportData.length === 0) {
+      alert("No customers found in this date range.");
+      return;
+    }
+
+    const headers = ["Phone", "Name", "Email", "Other Details", "Orders", "Last Updated"];
+    const rows = exportData.map(c => {
+      const profile = c.profile || {};
+      const nameKey = Object.keys(profile).find(k => k.toLowerCase().includes("name") && !k.toLowerCase().includes("company"));
+      const emailKey = Object.keys(profile).find(k => k.toLowerCase().includes("email"));
+      const name = nameKey ? profile[nameKey] : "";
+      const email = emailKey ? profile[emailKey] : "";
+      
+      const otherDetails = Object.keys(profile)
+        .filter(k => k !== nameKey && k !== emailKey)
+        .map(k => `${k}: ${profile[k]}`)
+        .join("; ");
+        
+      const customerOrders = orders.filter(o => o.customer_phone === c.customer_phone)
+        .map(o => `${o.product_name} (${o.order_id} - ${o.status})`)
+        .join("; ");
+        
+      return [
+        c.customer_phone,
+        name,
+        email,
+        otherDetails,
+        customerOrders,
+        c.last_updated ? new Date(c.last_updated).toLocaleString() : ""
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    });
+    
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `customers_export_${exportFrom}_to_${exportTo}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportModal(false);
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
@@ -61,6 +128,13 @@ export default function Customers({ activeTenant }) {
             />
           </div>
           <button 
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-brand/10 text-brand border border-brand/20 rounded-xl hover:bg-brand/20 transition-colors text-sm font-medium"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+          <button 
             onClick={loadCustomers}
             className="p-2.5 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/[0.08] text-white transition-colors"
           >
@@ -68,6 +142,49 @@ export default function Customers({ activeTenant }) {
           </button>
         </div>
       </div>
+
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#111111] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Download size={18} className="text-brand" /> Export Customer Data
+              </h3>
+              <button onClick={() => setShowExportModal(false)} className="p-1 text-white/40 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-2">From Date</label>
+                <input 
+                  type="date" 
+                  value={exportFrom}
+                  onChange={(e) => setExportFrom(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand transition-colors" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/60 uppercase tracking-wider mb-2">To Date</label>
+                <input 
+                  type="date" 
+                  value={exportTo}
+                  onChange={(e) => setExportTo(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand transition-colors" 
+                />
+              </div>
+            </div>
+            <div className="p-5 border-t border-white/10 flex justify-end gap-3 bg-white/[0.02]">
+              <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-sm font-medium text-white/60 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleExport} className="px-5 py-2 bg-brand text-white text-sm font-bold rounded-xl shadow-lg shadow-brand/20 hover:bg-brand-deep transition-all">
+                Download CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl">
         <div className="overflow-x-auto">
@@ -78,6 +195,7 @@ export default function Customers({ activeTenant }) {
                 <th className="px-6 py-4 font-medium text-white/70">Name</th>
                 <th className="px-6 py-4 font-medium text-white/70">Email</th>
                 <th className="px-6 py-4 font-medium text-white/70">Other Details</th>
+                <th className="px-6 py-4 font-medium text-white/70">Orders</th>
                 <th className="px-6 py-4 font-medium text-white/70">Last Updated</th>
                 <th className="px-6 py-4 font-medium text-white/70 text-right">Actions</th>
               </tr>
@@ -85,11 +203,11 @@ export default function Customers({ activeTenant }) {
             <tbody className="divide-y divide-white/5">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-white/40">Loading customers...</td>
+                  <td colSpan="7" className="px-6 py-12 text-center text-white/40">Loading customers...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-white/40">No customers found.</td>
+                  <td colSpan="7" className="px-6 py-12 text-center text-white/40">No customers found.</td>
                 </tr>
               ) : (
                 filtered.map((c, i) => {
@@ -130,6 +248,32 @@ export default function Customers({ activeTenant }) {
                               {profile[k]}
                             </span>
                           ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          {orders.filter(o => o.customer_phone === c.customer_phone).length === 0 ? (
+                            <span className="text-white/30 text-xs">-</span>
+                          ) : (
+                            orders.filter(o => o.customer_phone === c.customer_phone).map((o, idx) => (
+                              <div key={idx} className="flex flex-col bg-white/[0.03] border border-white/5 rounded-lg p-2 text-[11px]">
+                                <div className="flex items-center gap-1.5 font-medium text-white/80">
+                                  <ShoppingBag size={12} className="text-brand" />
+                                  {o.product_name} x{o.quantity || 1}
+                                </div>
+                                <div className="text-white/40 mt-1 flex justify-between items-center">
+                                  <span className="font-mono">{o.order_id}</span>
+                                  <span className={`px-1.5 py-0.5 rounded uppercase text-[9px] font-bold ${
+                                    o.status === "DELIVERED" ? "bg-emerald-500/10 text-emerald-400" :
+                                    o.status === "PENDING" ? "bg-amber-500/10 text-amber-400" :
+                                    "bg-blue-500/10 text-blue-400"
+                                  }`}>
+                                    {o.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">

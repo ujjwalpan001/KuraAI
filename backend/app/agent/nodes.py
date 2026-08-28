@@ -3,7 +3,7 @@ import base64
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from app.agent.state import AgentState
@@ -97,7 +97,6 @@ async def acknowledge_node(state: AgentState) -> AgentState:
     db = get_db()
 
     tenant = state.get("tenant_config") or {}
-    from datetime import timedelta
     retention_hours = int(tenant.get("retention_hours") or 72)
     expires_at = datetime.utcnow() + timedelta(hours=retention_hours)
     
@@ -1047,7 +1046,6 @@ async def dispatcher_node(state: AgentState) -> AgentState:
     new_status = "NEEDS_HUMAN" if state["session_status"] == "NEEDS_HUMAN" else "WAITING_FOR_BOT"
 
     tenant = state.get("tenant_config") or {}
-    from datetime import timedelta
     retention_hours = int(tenant.get("retention_hours") or 72)
     expires_at = datetime.utcnow() + timedelta(hours=retention_hours)
 

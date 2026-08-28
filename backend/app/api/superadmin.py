@@ -1,6 +1,6 @@
 import logging
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -28,8 +28,6 @@ async def get_metrics():
     # 1. Token Tracking (Mocked or Real from token_usage_log)
     # We will simulate the last 7 days for the beautiful bar chart if empty
     import random
-    from datetime import timedelta
-    
     today = datetime.utcnow()
     usage_data = []
     
