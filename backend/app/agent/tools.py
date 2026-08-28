@@ -133,8 +133,9 @@ TOOLS = [
         "name": "submit_payment_proof",
         "description": (
             "Submit a payment verification for the customer's most recent order. "
-            "Use this tool when the customer provides a Transaction ID, or when they send a screenshot/image of their payment receipt. "
-            "If they just sent an image, pass 'screenshot_attached' as the transaction_id. "
+            "CRITICAL: Do NOT use this tool if the customer only says 'okay', 'I will pay', or 'I sent it'. "
+            "You MUST wait until they ACTUALLY provide a real Transaction ID number or ACTUALLY attach a screenshot image! "
+            "If they sent an image, pass 'screenshot_attached' as the transaction_id. "
             "After calling this, tell the customer their payment is sent to the finance department for verification."
         ),
         "parameters": {
