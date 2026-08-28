@@ -55,9 +55,24 @@ export default function ChatThread({ session, messages, onChanged }) {
   const scrollRef = useRef(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const prevData = useRef({ sessionId: null, stateStr: "" });
+
   useEffect(() => { 
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el || !session) return;
+
+    const currentStateStr = `${messages.length}-${session.status}`;
+    const isNewSession = prevData.current.sessionId !== session.session_id;
+    const isNewUpdate = prevData.current.stateStr !== currentStateStr;
+
+    if (isNewSession || isNewUpdate) {
+      const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+      if (isNewSession || isNearBottom) {
+        setTimeout(() => {
+          el.scrollTo({ top: el.scrollHeight, behavior: isNewSession ? "auto" : "smooth" });
+        }, 10);
+      }
+      prevData.current = { sessionId: session.session_id, stateStr: currentStateStr };
     }
   }, [messages, session]);
   useEffect(() => { setDraft(""); }, [session?.session_id]);

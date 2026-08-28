@@ -158,6 +158,15 @@ async def context_retriever_node(state: AgentState) -> AgentState:
     
     # Merge them (session vars override profile vars if conflict)
     state["context_vars"] = {**profile_vars, **session_vars}
+    
+    # Ensure any session-specific variables are synced back to the global customer profile
+    if session_vars:
+        from datetime import datetime
+        await db.customers.update_one(
+            {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"]},
+            {"$set": {"profile": state["context_vars"], "last_updated": datetime.utcnow()}},
+            upsert=True
+        )
 
     # Catalog inventory (names) so the bot is HONEST about what actually exists
     cat = await db.catalog_items.find(
@@ -400,9 +409,9 @@ def _build_system_prompt(tenant: dict, global_settings: dict, catalog_names: lis
             for r in reqs:
                 prompt += f"- {r}\n"
             prompt += (
-                "CRITICAL INSTRUCTION: First, check the 'Saved Customer Details' above. If the customer has ordered before, their details might already be saved!\n"
+                "CRITICAL INSTRUCTION: First, check the 'DYNAMICALLY COLLECTED USER DETAILS' above. If the customer has ordered before, their details might already be saved!\n"
                 "If some or all required details are missing, you MUST ask the customer for ALL the missing details AT ONCE in a single friendly message to save time.\n"
-                "If the details are ALREADY present in the 'Saved Customer Details', do NOT ask them to type it again. Instead, show them the data you have and ask them to confirm if it is correct.\n"
+                "If the details are ALREADY present in the 'DYNAMICALLY COLLECTED USER DETAILS', do NOT ask them to type it again. Instead, show them the data you have and ask them to confirm if it is correct.\n"
                 "Once you have confirmed or collected ALL this information, call the `place_order` tool.\n"
             )
             
@@ -942,7 +951,7 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     model=settings.groq_model, 
                     messages=messages, 
                     tools=active_groq_tools,
-                    tool_choice="auto",
+                    tool_choice="none",
                     temperature=0.5, 
                     max_tokens=400,
                 )
