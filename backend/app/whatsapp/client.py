@@ -71,11 +71,14 @@ async def _delete_instance(instance_name: str, path: str) -> dict:
 # ---------------------------------------------------------------------------
 
 async def send_text_message(instance_name: str, to: str, text: str) -> dict:
-    """Send a plain text message via Evolution API."""
+    """Send a plain text message via Evolution API with dynamic human-like typing delay."""
+    # Calculate delay: roughly 30ms per character. Min 2s, Max 8s to not annoy the customer.
+    calculated_delay = max(2000, min(8000, len(text) * 30))
+    
     return await _post_instance(instance_name, "/send/text", {
         "number": to,
         "text": text,
-        "delay": 3000, # 3 seconds typing delay to prevent bans
+        "delay": calculated_delay,
     })
 
 
