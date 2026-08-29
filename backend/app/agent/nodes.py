@@ -750,8 +750,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 
                 # Send notification to admin
                 try:
-                    admin_numbers = tenant.get("personal_numbers") or []
-                    if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                    admin_numbers = []
+                    if tenant.get("owner_number"):
                         admin_numbers.append(tenant.get("owner_number"))
                     if admin_numbers:
                         instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
@@ -802,8 +802,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                         
                         # Notify admin
                         try:
-                            admin_numbers = tenant.get("personal_numbers") or []
-                            if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                            admin_numbers = []
+                            if tenant.get("owner_number"):
                                 admin_numbers.append(tenant.get("owner_number"))
                             if admin_numbers:
                                 instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
@@ -840,8 +840,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                         )
                         # Notify admin
                         try:
-                            admin_numbers = tenant.get("personal_numbers") or []
-                            if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                            admin_numbers = []
+                            if tenant.get("owner_number"):
                                 admin_numbers.append(tenant.get("owner_number"))
                             if admin_numbers:
                                 instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
@@ -901,8 +901,8 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                             )
                             # Notify admin
                             try:
-                                admin_numbers = tenant.get("personal_numbers") or []
-                                if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                                admin_numbers = []
+                                if tenant.get("owner_number"):
                                     admin_numbers.append(tenant.get("owner_number"))
                                 if admin_numbers:
                                     instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
