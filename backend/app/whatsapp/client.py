@@ -75,6 +75,7 @@ async def send_text_message(instance_name: str, to: str, text: str) -> dict:
     return await _post_instance(instance_name, "/send/text", {
         "number": to,
         "text": text,
+        "delay": 3000, # 3 seconds typing delay to prevent bans
     })
 
 
@@ -85,6 +86,7 @@ async def send_image_message(instance_name: str, to: str, image_url: str, captio
         "type": "image",
         "url": image_url,
         "caption": caption,
+        "delay": 3000,
     })
 
 
@@ -95,6 +97,7 @@ async def send_document_message(instance_name: str, to: str, doc_url: str, filen
         "type": "document",
         "url": doc_url,
         "filename": filename,
+        "delay": 3000,
     })
 
 
