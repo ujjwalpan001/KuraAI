@@ -335,7 +335,7 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     payload_bytes = await request.body()
     payload = json.loads(payload_bytes) if payload_bytes else {}
 
-    pass
+    db = get_db()
 
     message_data = _extract_message(payload)
     if not message_data:
