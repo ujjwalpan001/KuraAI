@@ -775,7 +775,6 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                 # Hard validation to prevent LLM from hallucinating a proof when user just says "okay"
                 has_image = state.get("inbound_media_type") in ("image", "document") or state.get("inbound_image_description")
                 inbound_text = state.get("inbound_text") or ""
-                import re
                 has_txn_number = bool(re.search(r'[A-Za-z0-9]{6,}', inbound_text))
                 
                 if not has_image and not has_txn_number:
