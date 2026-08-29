@@ -425,7 +425,7 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
         is_admin = customer_phone in p_nums or (sender_alt and sender_alt in p_nums) or customer_phone == owner_number
         
         if is_admin:
-            text_content = message_data.get("text_content", "").strip().lower()
+            text_content = message_data.get("text", "").strip().lower()
             if text_content in ("1", "0", "approve", "reject", "approved", "rejected"):
                 recent_order = await db.orders.find_one(
                     {"tenant_id": tenant_id, "payment_status": "VERIFICATION_PENDING"},

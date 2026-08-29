@@ -346,24 +346,29 @@ async def update_payment_status(order_id: str, body: PaymentStatusUpdate, user: 
             
     await db.orders.update_one({"_id": oid}, {"$set": {"payment_status": body.payment_status}})
     
-    # Send confirmation to user
+    # Send confirmation to user and owner
     try:
         tenant_doc = await db.tenants.find_one({"tenant_id": order["tenant_id"]})
         instance_name = (tenant_doc.get("evolution_instance") or "default")
+        owner_number = tenant_doc.get("owner_number")
         import app.whatsapp.client as wa
         
         if body.payment_status == "VERIFIED":
-            await wa.send_text_message(
-                instance_name, 
-                order["customer_phone"], 
-                f"✅ *Payment Verified!*\n\nYour payment for {order.get('product_name')} has been successfully verified by our finance department. Your order is now processing!"
-            )
+            cust_msg = f"✅ *Payment Verified!*\n\nYour payment for {order.get('product_name')} has been successfully verified by our finance department. Your order is now processing!"
+            owner_msg = f"✅ *Order {order.get('order_id')} is Paid Successfully!*\n\nThe customer's payment has been verified and the order is now marked as PAID."
+            
+            await wa.send_text_message(instance_name, order["customer_phone"], cust_msg)
+            if owner_number:
+                await wa.send_text_message(instance_name, owner_number, owner_msg)
+                
         elif body.payment_status == "REJECTED":
-            await wa.send_text_message(
-                instance_name, 
-                order["customer_phone"], 
-                f"❌ *Payment Rejected*\n\nUnfortunately, we could not verify your payment proof for {order.get('product_name')}. Please try submitting it again or ask to speak to a human for assistance."
-            )
+            cust_msg = f"❌ *Payment Rejected*\n\nUnfortunately, we could not verify your payment proof for {order.get('product_name')}. Please try submitting it again or ask to speak to a human for assistance."
+            owner_msg = f"❌ *Order {order.get('order_id')} Payment Rejected*\n\nYou rejected the payment proof for {order.get('customer_phone')}."
+            
+            await wa.send_text_message(instance_name, order["customer_phone"], cust_msg)
+            if owner_number:
+                await wa.send_text_message(instance_name, owner_number, owner_msg)
+                
     except Exception as e:
         print(f"Failed to send payment status whatsapp: {e}")
             

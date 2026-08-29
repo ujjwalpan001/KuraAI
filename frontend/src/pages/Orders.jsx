@@ -85,9 +85,9 @@ export default function Orders({ tenantId, tenantObj, onTenantsChanged }) {
   const handleProcessPayment = async (orderId, isApprove) => {
     const paymentStatus = isApprove ? "VERIFIED" : "REJECTED";
     
-    // Check if 'PAYMENT' exists in dynamicStatuses, otherwise fallback to 'PROCESSING'
-    const hasPaymentCol = dynamicStatuses.some(s => s.id === "PAYMENT" || s.label.toUpperCase() === "PAYMENT");
-    const targetStatus = isApprove ? (hasPaymentCol ? "PAYMENT" : "PROCESSING") : "CANCELLED";
+    // Check if 'PAID' exists in dynamicStatuses, otherwise fallback to 'PROCESSING'
+    const hasPaidCol = dynamicStatuses.some(s => s.id === "PAID" || s.label.toUpperCase() === "PAID");
+    const targetStatus = isApprove ? (hasPaidCol ? "PAID" : "PROCESSING") : "CANCELLED";
 
     setOrders(orders.map(o => o._id === orderId ? { ...o, payment_status: paymentStatus, status: targetStatus } : o));
     try {
