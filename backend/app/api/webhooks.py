@@ -367,7 +367,10 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
             try:
                 r_url = settings.redis_url
                 if not r_url.startswith(("redis://", "rediss://", "unix://")):
-                    r_url = f"redis://{r_url}"
+                    r_url = f"rediss://{r_url}"
+                if "upstash.io" in r_url and r_url.startswith("redis://"):
+                    r_url = r_url.replace("redis://", "rediss://")
+                
                 r = redis.Redis.from_url(r_url, decode_responses=True)
                 key = f"rate_limit:{customer_phone}"
                 now = time.time()
