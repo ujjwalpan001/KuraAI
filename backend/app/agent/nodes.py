@@ -784,39 +784,39 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     }
                 else:
                     db = get_db()
-                
-                # Find the most recent PENDING order for this customer
-                recent_order = await db.orders.find_one(
-                    {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"], "status": "PENDING"},
-                    sort=[("created_at", -1)]
-                )
-                
-                if recent_order:
-                    await db.orders.update_one(
-                        {"_id": recent_order["_id"]},
-                        {"$set": {
-                            "payment_status": "VERIFICATION_PENDING",
-                            "payment_proof": txn_id
-                        }}
+                    
+                    # Find the most recent PENDING order for this customer
+                    recent_order = await db.orders.find_one(
+                        {"tenant_id": state["tenant_id"], "customer_phone": state["customer_phone"], "status": "PENDING"},
+                        sort=[("created_at", -1)]
                     )
                     
-                    # Notify admin
-                    try:
-                        admin_numbers = tenant.get("personal_numbers") or []
-                        if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
-                            admin_numbers.append(tenant.get("owner_number"))
-                        if admin_numbers:
-                            instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
-                            notif_msg = f"💳 *PAYMENT PROOF SUBMITTED!*\n\n*Customer:* {state['customer_phone']}\n*Order:* {recent_order.get('product_name')}\n*Proof:* {txn_id}\n\n👉 *Reply 1* to APPROVE\n👉 *Reply 0* to REJECT"
-                            for number in admin_numbers:
-                                import app.whatsapp.client as wa
-                                await wa.send_text_message(instance_name, number, notif_msg)
-                    except Exception as e:
-                        logger.warning(f"Failed to send admin payment notification: {e}")
+                    if recent_order:
+                        await db.orders.update_one(
+                            {"_id": recent_order["_id"]},
+                            {"$set": {
+                                "payment_status": "VERIFICATION_PENDING",
+                                "payment_proof": txn_id
+                            }}
+                        )
                         
-                    result = {"status": "success", "message": "Payment proof attached to order. Tell the customer it's sent to finance for verification."}
-                else:
-                    result = {"status": "error", "message": "No pending orders found for this customer."}
+                        # Notify admin
+                        try:
+                            admin_numbers = tenant.get("personal_numbers") or []
+                            if tenant.get("owner_number") and tenant.get("owner_number") not in admin_numbers:
+                                admin_numbers.append(tenant.get("owner_number"))
+                            if admin_numbers:
+                                instance_name = (state.get("tenant_config") or {}).get("evolution_instance") or "default"
+                                notif_msg = f"💳 *PAYMENT PROOF SUBMITTED!*\n\n*Customer:* {state['customer_phone']}\n*Order:* {recent_order.get('product_name')}\n*Proof:* {txn_id}\n\n👉 *Reply 1* to APPROVE\n👉 *Reply 0* to REJECT"
+                                for number in admin_numbers:
+                                    import app.whatsapp.client as wa
+                                    await wa.send_text_message(instance_name, number, notif_msg)
+                        except Exception as e:
+                            logger.warning(f"Failed to send admin payment notification: {e}")
+                            
+                        result = {"status": "success", "message": "Payment proof attached to order. Tell the customer it's sent to finance for verification."}
+                    else:
+                        result = {"status": "error", "message": "No pending orders found for this customer."}
 
             elif name == "initiate_return":
                 target_order_id = args.get("order_id") or ""
