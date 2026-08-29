@@ -960,8 +960,6 @@ async def llm_reasoning_node(state: AgentState) -> AgentState:
                     groq, 
                     model=settings.groq_model, 
                     messages=messages, 
-                    tools=active_groq_tools,
-                    tool_choice="none",
                     temperature=0.5, 
                     max_tokens=400,
                 )
