@@ -278,11 +278,17 @@ async def _fetch_and_store_media(message_data: dict, tenant_id: str, direction: 
         )
         stored_url = upload_result.get("secure_url")
         
-        # Update the audit log
-        await db.message_audit_log.update_many(
-            {"whatsapp_message_id": message_data["message_id"]},
-            {"$set": {"media_url": stored_url}}
-        )
+        # Update the audit log with retry for race conditions
+        for _ in range(5):
+            res = await db.message_audit_log.update_many(
+                {"whatsapp_message_id": message_data["message_id"]},
+                {"$set": {"media_url": stored_url}}
+            )
+            if res.matched_count > 0:
+                break
+            import asyncio
+            await asyncio.sleep(1)
+            
         logger.info(f"[{direction} MEDIA] Fetched and stored media -> {stored_url}")
     except Exception as e:
         logger.warning(f"Failed to fetch {direction} media: {e}")

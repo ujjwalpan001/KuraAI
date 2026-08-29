@@ -19,15 +19,26 @@ const fmtTime = (iso) => {
 };
 
 function Media({ msg }) {
+  if (!msg.media_url && msg.media_type) {
+    return (
+      <div className="flex items-center gap-2 mt-1 px-3 py-2.5 bg-black/[0.03] rounded-lg border border-black/[0.02]">
+        <div className="w-3.5 h-3.5 border-[2px] border-black/20 border-t-brand rounded-full animate-spin shrink-0"></div>
+        <span className="text-[11px] text-muted/70 font-medium tracking-wide">Processing media...</span>
+      </div>
+    );
+  }
+
   if (!msg.media_url) return null;
-  if (msg.media_type === "IMAGE") {
+  
+  const type = msg.media_type?.toUpperCase();
+  if (type === "IMAGE") {
     return (
       <a href={displayUrl(msg.media_url)} target="_blank" rel="noreferrer" className="block mt-1">
         <img src={displayUrl(msg.media_url)} alt="" className="rounded-lg max-w-[240px] border border-black/5" loading="lazy" />
       </a>
     );
   }
-  if (msg.media_type === "DOCUMENT") {
+  if (type === "DOCUMENT") {
     return (
       <a
         href={displayUrl(msg.media_url)}
