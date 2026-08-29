@@ -231,7 +231,7 @@ async def get_media_base64(instance_name: str, raw_message: dict, convert_to_mp4
     Evolution Go endpoint: POST /chat/getBase64FromMediaMessage/{instance}
     """
     url = f"{_evo_base()}/chat/getBase64FromMediaMessage/{instance_name}"
-    headers = {"apikey": settings.evolution_api_key, "Content-Type": "application/json"}
+    headers = {"apikey": instance_name, "Content-Type": "application/json"}
     payload = {
         "message": raw_message,
         "convertToMp4": convert_to_mp4
