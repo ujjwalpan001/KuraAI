@@ -33,15 +33,6 @@ Small shops in Nepal get most of their orders in chat, and they miss sales when 
 | 🙋 **Knows when to call a person** | Never guesses. When it doesn't know, or the customer is upset, it hands the chat to the team. |
 | 👥 **Team access** | Owner, Manager and Support roles, so staff only see what they need. |
 
-## Plans
-
-Paid in Nepali rupees with eSewa, Khalti or bank transfer:
-
-- **Aarambha**: Rs 1,299 / month, with a free trial
-- **Pragati Plus**: Rs 2,999 / month, with a free trial
-- **Shikhar Pro**: from Rs 5,999 / month, custom for larger businesses
-
-Photo search, payment verification, Hey Kura and inventory are included. Current details are on **[kurasewa.com/pricing](https://www.kurasewa.com/pricing)**.
 
 ## Try it
 
